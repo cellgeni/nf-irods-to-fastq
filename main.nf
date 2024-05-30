@@ -126,7 +126,7 @@ process renameCram {
 process cramToFastq {
     label "normal4core"
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
-    publishDir "${sample}", mode: "copy", enabled: "(${params.publish_fastqs} & ${params.for_upload} == true)"
+    publishDir "${sample}", mode: "copy", enabled: "(${params.publish_fastqs} & (${params.aexpress_upload} == 'false'))"
     input:
         tuple val(sample), path(cram), val(i1), val(i2), val(r1), val(r2)
     output:
@@ -156,7 +156,7 @@ process cramToFastq {
 
 process concatFastqs {
     label "normal"
-    publishDir "${launchDir}", pattern: 'arrayexpress/*.fastq.gz', mode: 'copy', enabled: "${params.upload_type} == 'manual'"
+    publishDir "${launchDir}", pattern: 'arrayexpress/*.fastq.gz', mode: 'copy', enabled: "${params.aexpress_upload} == 'manual'"
     input:
         tuple val(sample), path(fastqs)
     output:
@@ -178,6 +178,19 @@ process concatFastqs {
             echo "  ...Concatenating I2"
             cat \$list_i2 > arrayexpress/${sample}_S1_L001_I2_001.fastq.gz
         fi
+        """
+}
+
+process uploadtoArrayExpress {
+    label "normal"
+    input:
+        path(fastqs)
+    output:
+        path("done.txt")
+    script:
+        """
+        lftp -u ${params.aexpress_credentials} ${params.aexpress_address} -e "set ftp:ssl-allow no; cd ${params.aexpress_directory}; mput ${fastqs}; bye"
+        touch done.txt
         """
 }
 
@@ -269,6 +282,16 @@ workflow irods {
         fastqs = fastqs
 }
 
+workflow arrayexpress {
+    // Concatenate the multiple fastqs from each of I1/I2/R1/R2 to a single I1/I2/R1/R2
+    concattedFastqs = concatFastqs(irods.out)
+    //  Files are ready to upload
+    if (params.upload_type == 'auto'){
+        uploadtoArrayExpress(concattedFastqs)
+    }
+
+}
+
 // Do this so the script actually runs
 // The equivalent of python's main() thing, I guess
 workflow {
@@ -285,7 +308,8 @@ workflow {
         findcrams()
     }
 
-    if (params.for_upload == true){
-        concatFastqs(irods.out)
+    // Do we need the FASTQs for ArrayExpress submission?
+    if (params.aexpress_upload != 'false'){
+        arrayexpress()
     }
 }

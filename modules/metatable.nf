@@ -26,7 +26,7 @@ process findCrams {
             paste -d '/' - - | \
             grep -v "#888.cram" | \
             grep -v "yhuman" | \
-            sed "s/^/${sample},/" > "cramlist.csv"
+            sed "s/^/${sample},/" > "cramlist.csv" || echo "WARNING! No files for $sample"
         """
 }
 

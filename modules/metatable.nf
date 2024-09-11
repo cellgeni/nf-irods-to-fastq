@@ -30,7 +30,7 @@ process findCrams {
         """
 }
 
-// Get the metadata for all samples and create a table
+// Get the metadata for each sample
 process getMetadata {
     label "easy"
     input:
@@ -45,8 +45,7 @@ process getMetadata {
         """
 }
 
-// Merge the per-sample CRAM lists into a single massive list across all samples
-// We might be publishing this, and ending our run here
+// Save all metadata to csv file
 process combineMetadata {
     label "easy"
     publishDir "results", mode: "copy"

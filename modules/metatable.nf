@@ -18,7 +18,7 @@ process findCrams {
         path("cramlist.csv")
     script:
         """
-        imeta qu -z seq -d sample = "${sample}" and target = 1 | \
+        imeta qu -z seq -d sample = "${sample}" and target = 1 and type != "fastq" | \
             grep -v "No rows found" | \
             sed 's/collection: //g' | \
             sed 's/dataObj: //g' | \

@@ -11,6 +11,7 @@
 // Store the sample ID and the CRAM path in a CSV file for subsequent merging
 process findCrams {
     label "easy"
+    tag "Searching files for sample $sample"
     maxForks 10
     input:
         val(sample)
@@ -33,6 +34,7 @@ process findCrams {
 // Get the metadata for each sample
 process getMetadata {
     label "easy"
+    tag "Getting metadata for $cram"
     input:
         tuple val(sample), val(cram)
     output:
@@ -48,6 +50,7 @@ process getMetadata {
 // Save all metadata to csv file
 process combineMetadata {
     label "easy"
+    tag "Combining the metadata for all files to metadata.csv"
     publishDir "results", mode: "copy"
     input:
         path('input/*.json')

@@ -126,7 +126,7 @@ process renameCram {
 process cramToFastq {
     label "normal4core"
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
-    publishDir "${params.publish_dir}", mode: "copy", overwrite: true, enabled: { params.publish_fastqs && !params.merge }
+    publishDir "${params.publish_dir}", mode: "copy", overwrite: true, enabled: "${ params.publish_fastqs && !params.merge }"
     input:
         tuple val(sample), path(cram), val(i1), val(i2), val(r1), val(r2)
     output:

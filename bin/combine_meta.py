@@ -5,10 +5,11 @@ import sys
 import json
 import csv
 import re
+from typing import Set, List
 
 
-def make_unique(
-    sample_fastq_name: str, unique_tags: set[int], fastq_names: list[str]
+def make_unique_names(
+    sample_fastq_name: str, unique_tags: Set[int], fastq_names: List[str]
 ) -> str:
     """
     Creates a unique filename
@@ -50,7 +51,7 @@ def main():
             # reading the json file
             sample_meta = json.load(file)
             # making fastq_name unique
-            sample_meta["fastq_name"] = make_unique(
+            sample_meta["fastq_name"] = make_unique_names(
                 sample_meta["fastq_name"], unique_tags, fastq_names
             )
             meta_list.append(sample_meta)

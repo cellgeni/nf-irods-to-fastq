@@ -1,17 +1,16 @@
-///////////////////////////////////////////////////////////////////////////////
-// Get CRAMs from iRODS and convert them to fastq 
-// Logic based on mapcloud CRAM downloader/converter
-// https://github.com/Teichlab/mapcloud/tree/58b1d7163de7b0b2b8880fad19d722b586fc32b9/scripts/10x/utils
-// Author: kp9, bc8, sm42
- ///////////////////////////////////////////////////////////////////////////////
 
-
+// functrion with error message if there are no files for a sample
+def findCramsError(sample) {
+    log.warn "No files found for sample $sample"
+    return 'ignore'
+}
 
 // Prepare a list of the CRAMs for the sample
 // Store the sample ID and the CRAM path in a CSV file for subsequent merging
 process findCrams {
     label "easy"
     tag "Searching files for sample $sample"
+    errorStrategy {task.exitStatus == 1 ? findCramsError(sample) : 'terminate'}
     maxForks 10
     input:
         val(sample)
@@ -27,7 +26,7 @@ process findCrams {
             paste -d '/' - - | \
             grep -v "#888.cram" | \
             grep -v "yhuman" | \
-            sed "s/^/${sample},/" > "cramlist.csv" || echo "WARNING! No files for $sample"
+            sed "s/^/${sample},/" > "cramlist.csv" || exit 1
         """
 }
 
@@ -38,12 +37,25 @@ process getMetadata {
     input:
         tuple val(sample), val(cram)
     output:
-        path("*.json")
+        tuple val(sample), path("*.txt")
     script:
         """
         imeta ls -d $cram > metadata.txt
-        echo $cram
-        parser.py metadata.txt
+        """
+}
+
+// parse metadata for each sample
+process parseMetadata {
+    debug true
+    label "easy"
+    tag "Parsing metadata for $sample"
+    input:
+        tuple val(sample), path("input/*.txt")
+    output:
+        path('*.json')
+    script:
+        """
+        parser.py ./input/
         """
 }
 
@@ -51,11 +63,11 @@ process getMetadata {
 process combineMetadata {
     label "easy"
     tag "Combining the metadata for all files to metadata.csv"
-    publishDir "results", mode: "copy"
+    publishDir "metadata", mode: "copy"
     input:
         path('input/*.json')
     output:
-        path("metadata.csv")
+        path("metadata.tsv")
     script:
         """
         combine_meta.py ./input/

@@ -63,9 +63,9 @@ def main():
     meta_list = sorted(meta_list, key=lambda x: x["sample"])
 
     # write all metadata to csv
-    with open("metadata.csv", mode="w") as csv_file:
+    with open("metadata.tsv", mode="w") as csv_file:
         # create writer object
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames, delimiter="\t")
 
         # write the data
         writer.writeheader()

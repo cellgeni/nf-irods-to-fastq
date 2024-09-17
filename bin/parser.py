@@ -94,6 +94,7 @@ def main():
         "sample_supplier_name",
         "library_type",
         "total_reads_irods",
+        "md5",
     ]
 
     for meta in metadata_list:

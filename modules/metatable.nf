@@ -35,12 +35,12 @@ process getMetadata {
     label "easy"
     tag "Getting metadata for $cram"
     input:
-        tuple val(sample), val(cram)
+        tuple val(sample), val(cram_path)
     output:
         tuple val(sample), path("*.txt")
     script:
         """
-        imeta ls -d $cram > metadata.txt
+        imeta ls -d $cram_path > metadata.txt
         """
 }
 

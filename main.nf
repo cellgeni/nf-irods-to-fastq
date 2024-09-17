@@ -3,6 +3,8 @@ include { getMetadata } from './modules/metatable.nf'
 include { parseMetadata } from './modules/metatable.nf'
 include { combineMetadata } from './modules/metatable.nf'
 include { downloadCram } from './modules/getfiles.nf'
+include { cramToFastq } from './modules/getfiles.nf'
+
 
 
 workflow findcrams {
@@ -31,8 +33,12 @@ workflow downloadcrams {
     take:
         cram_metadata
     main:
+        // download cram files
         crams = downloadCram(cram_metadata)
-        crams.cram_file.view()
+        // crams.cram_file.view()
+        
+        // convert cram files to fastq
+        fastq_files = cramToFastq(crams)
 
 }
 

@@ -10,14 +10,12 @@ def downloadCramError(sample) {
 // There was a time where irods would bug out and not report an error when there was one
 process downloadCram {
     label "normal4core"
-    publishDir 'results'
     errorStrategy {task.exitStatus == 1 ? downloadCramError(sample) : 'terminate'}
     maxForks 10
     input:
         tuple val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
     output:
-        tuple val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5), emit: cram_metadata 
-        path("*.cram"), emit: cram_file
+        tuple path("*.cram"), val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
     script:
         """
         iget ${cram_path}
@@ -44,31 +42,29 @@ process downloadCram {
 // Indices live in the BC tag, and a dual index is signalled by the presence of "-"
 // Remove any empty (index) files at the end, let's assume no more than 50 bytes big
 process cramToFastq {
+    publishDir "${params.publish_dir}", mode: "copy", overwrite: true
     label "normal4core"
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
-    publishDir ''
     input:
-        tuple val(sample), path(cram), val(i1), val(i2), val(r1), val(r2)
+        tuple path(cram_file), val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
     output:
-        tuple val(sample), path("*.fastq.gz")
+        tuple path("*.fastq.gz"), val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
     script:
         """
         export REF_PATH=${params.REF_PATH}
-        scount=`basename ${cram} .cram | cut -f 2 -d "#"`
-        lcount=`basename ${cram} .cram | cut -f 1 -d "#"`
         ISTRING="${params.index_format}"
         if [[ \$ISTRING == "i*i*" ]]
         then
-            if [[ `samtools view ${cram} | grep "BC:" | head -n 1 | sed "s/.*BC:Z://" | sed "s/\\t.*//" | tr -dc "-" | wc -c` == 0 ]]
+            if [[ `samtools view $cram_file | grep "BC:" | head -n 1 | sed "s/.*BC:Z://" | sed "s/\\t.*//" | tr -dc "-" | wc -c` == 0 ]]
             then
                 ISTRING="i*"
             fi
         fi
-        if [[ `samtools view -H ${cram} | grep '@SQ' | wc -l` == 0 ]]
+        if [[ `samtools view -H $cram_file | grep '@SQ' | wc -l` == 0 ]]
         then
-            samtools fastq -@ ${task.cpus} -1 ${sample}_S\$scount\\_L00\$lcount\\_${r1}_001.fastq.gz -2 ${sample}_S\$scount\\_L00\$lcount\\_${r2}_001.fastq.gz --i1 ${sample}_S\$scount\\_L00\$lcount\\_${i1}_001.fastq.gz --i2 ${sample}_S\$scount\\_L00\$lcount\\_${i2}_001.fastq.gz --index-format \$ISTRING -n ${cram}
+            samtools fastq -@ ${task.cpus} -1 ${fastq_name}_R1_001.fastq.gz -2 ${fastq_name}_R2_001.fastq.gz --i1 ${fastq_name}_I1_001.fastq.gz --i2 ${fastq_name}_I2_001.fastq.gz --index-format \$ISTRING -n $cram_file
         else
-            samtools view -b ${cram} | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -1 ${sample}_S\$scount\\_L00\$lcount\\_${r1}_001.fastq.gz -2 ${sample}_S\$scount\\_L00\$lcount\\_${r2}_001.fastq.gz --i1 ${sample}_S\$scount\\_L00\$lcount\\_${i1}_001.fastq.gz --i2 ${sample}_S\$scount\\_L00\$lcount\\_${i2}_001.fastq.gz --index-format \$ISTRING -n -
+            samtools view -b $cram_file | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -@ ${task.cpus} -1 ${fastq_name}_R1_001.fastq.gz -2 ${fastq_name}_R2_001.fastq.gz --i1 ${fastq_name}_I1_001.fastq.gz --i2 ${fastq_name}_I2_001.fastq.gz --index-format \$ISTRING -n -
         fi
         find . -type f -name "*.fastq.gz" -size -50c -exec rm {} \\;
         """

@@ -13,15 +13,15 @@ process downloadCram {
     errorStrategy {task.exitStatus == 1 ? downloadCramError(sample) : 'terminate'}
     maxForks 10
     input:
-        tuple val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
+        val meta
     output:
-        tuple path("*.cram"), val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
+        tuple path("*.cram"), val(meta)
     script:
         """
-        iget ${cram_path}
-        FID=`basename ${cram_path}`
+        iget ${meta['cram_path']}
+        FID=`basename ${meta['cram_path']}`
         MD5LOCAL=`md5sum \$FID | cut -f -1 -d " "`
-        if [ \$MD5LOCAL != $md5 ]
+        if [ \$MD5LOCAL != ${meta['md5']} ]
         then
             exit 1
         fi
@@ -46,9 +46,9 @@ process cramToFastq {
     label "normal4core"
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
     input:
-        tuple path(cram_file), val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
+        tuple path(cram_file), val(meta)
     output:
-        tuple path("*.fastq.gz"), val(sample), val(cram_path), val(fastq_name), val(sample_supplier_name), val(library_type), val(total_reads_irods), val(md5)
+        tuple path("*.fastq.gz"), val(meta)
     script:
         """
         export REF_PATH=${params.REF_PATH}
@@ -62,9 +62,9 @@ process cramToFastq {
         fi
         if [[ `samtools view -H $cram_file | grep '@SQ' | wc -l` == 0 ]]
         then
-            samtools fastq -@ ${task.cpus} -1 ${fastq_name}_R1_001.fastq.gz -2 ${fastq_name}_R2_001.fastq.gz --i1 ${fastq_name}_I1_001.fastq.gz --i2 ${fastq_name}_I2_001.fastq.gz --index-format \$ISTRING -n $cram_file
+            samtools fastq -@ ${task.cpus} -1 ${meta['fastq_name']}_R1_001.fastq.gz -2 ${meta['fastq_name']}_R2_001.fastq.gz --i1 ${meta['fastq_name']}_I1_001.fastq.gz --i2 ${meta['fastq_name']}_I2_001.fastq.gz --index-format \$ISTRING -n $cram_file
         else
-            samtools view -b $cram_file | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -@ ${task.cpus} -1 ${fastq_name}_R1_001.fastq.gz -2 ${fastq_name}_R2_001.fastq.gz --i1 ${fastq_name}_I1_001.fastq.gz --i2 ${fastq_name}_I2_001.fastq.gz --index-format \$ISTRING -n -
+            samtools view -b $cram_file | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -@ ${task.cpus} -1 ${meta['fastq_name']}_R1_001.fastq.gz -2 ${meta['fastq_name']}_R2_001.fastq.gz --i1 ${meta['fastq_name']}_I1_001.fastq.gz --i2 ${meta['fastq_name']}_I2_001.fastq.gz --index-format \$ISTRING -n -
         fi
         find . -type f -name "*.fastq.gz" -size -50c -exec rm {} \\;
         """

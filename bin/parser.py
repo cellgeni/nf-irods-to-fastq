@@ -10,6 +10,17 @@ from collections import defaultdict
 WARNING_COLOR = "\033[93m"
 ENDC = "\033[0m"
 
+META_COLUMNS = [
+        "sample",
+        "cram_path",
+        "fastq_name",
+        "sample_supplier_name",
+        "library_type",
+        "total_reads_irods",
+        "md5",
+        "is_paired_read"
+    ]
+
 
 def parse_txt(filepath: str) -> Dict[str, Any]:
     """
@@ -86,22 +97,12 @@ def main():
     # check library types
     check_library_type(metadata_list)
 
-    # define columns of interest
-    columns_of_interest = [
-        "sample",
-        "cram_path",
-        "fastq_name",
-        "sample_supplier_name",
-        "library_type",
-        "total_reads_irods",
-        "md5",
-    ]
-
+    # parse the metadata
     for meta in metadata_list:
         # get a basename to save data
         basename = meta["fastq_name"]
         # filter metadata
-        meta_filtered = {col: meta.get(col) for col in columns_of_interest}
+        meta_filtered = {col: meta.get(col) for col in META_COLUMNS}
         # Dump processed meta to json
         with open(f"{basename}.json", "w") as json_file:
             json.dump(meta_filtered, json_file)

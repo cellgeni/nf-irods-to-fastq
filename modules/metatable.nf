@@ -63,7 +63,7 @@ process parseMetadata {
 process combineMetadata {
     label "easy"
     tag "Combining the metadata for all files to metadata.csv"
-    publishDir "metadata", mode: "copy"
+    publishDir "metadata", mode: "copy", overwrite: true
     input:
         path('input/*.json')
     output:

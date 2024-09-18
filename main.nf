@@ -52,10 +52,12 @@ workflow {
 
     // find all files and their metadata for a given list of samples
     findcrams(samples)
-    cram_metadata = findcrams.out.splitCsv( skip: 1 , sep: '\t')
+    cram_metadata = findcrams.out.splitCsv( header: true , sep: '\t')
     //cram_metadata.view()
     //.splitCsv( header: ['sample', 'cram_path', 'fastq_name', 'sample_supplier_name', 'library_type', 'total_reads_irods'], skip: 1 , sep: '\t')
 
     // Download cram data
-    downloadcrams(cram_metadata)
+    if (params.meta == false) {
+         downloadcrams(cram_metadata)
+    }
 }

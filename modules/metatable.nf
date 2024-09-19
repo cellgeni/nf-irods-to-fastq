@@ -33,7 +33,7 @@ process findCrams {
 // Get the metadata for each sample
 process getMetadata {
     label "easy"
-    tag "Getting metadata for $cram"
+    tag "Getting metadata for $cram_path"
     input:
         tuple val(sample), val(cram_path)
     output:

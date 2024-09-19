@@ -11,15 +11,14 @@ WARNING_COLOR = "\033[93m"
 ENDC = "\033[0m"
 
 META_COLUMNS = [
-        "sample",
-        "cram_path",
-        "fastq_name",
-        "sample_supplier_name",
-        "library_type",
-        "total_reads_irods",
-        "md5",
-        "is_paired_read"
-    ]
+    "sample",
+    "cram_path",
+    "fastq_name",
+    "sample_supplier_name",
+    "library_type",
+    "total_reads",
+    "md5"
+]
 
 
 def parse_txt(filepath: str) -> Dict[str, Any]:
@@ -102,7 +101,7 @@ def main():
         # get a basename to save data
         basename = meta["fastq_name"]
         # filter metadata
-        meta_filtered = {col: meta.get(col) for col in META_COLUMNS}
+        meta_filtered = {col: meta.get(col, "NaN") for col in META_COLUMNS}
         # Dump processed meta to json
         with open(f"{basename}.json", "w") as json_file:
             json.dump(meta_filtered, json_file)

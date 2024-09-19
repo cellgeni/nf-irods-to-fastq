@@ -8,14 +8,16 @@ include { cramToFastq } from './modules/getfiles.nf'
 
 
 workflow findcrams {
-    take:
-        samples
     main:
+        // We need some sort of sample information to download
+        if (params.samples == null) {
+            error "Please provide a sample-list file via --sample"
+        }
+        // read sample names from file
+        samples = Channel.fromPath(params.samples, checkIfExists: true).splitCsv().flatten()
+
         // find all cram files for all samples
         cram_path = findCrams(samples).splitCsv()
-
-        // get cram meta for all samples
-
 
         // get metadata for samples
         meta_files = getMetadata(cram_path).groupTuple()
@@ -39,25 +41,28 @@ workflow downloadcrams {
         
         // convert cram files to fastq
         fastq_files = cramToFastq(crams)
+    workflow.onComplete {
+        log.info "Workflow completed at: ${workflow.complete}"
+        log.info "Time taken: ${workflow.duration}"
+        log.info "Execution status: ${workflow.success ? 'success' : 'failed'}"
+        log.info "Error: $workflow.errorMessage"
+    }
 
 }
 
 workflow {
-    // We need some sort of sample information to download
-    if (params.sample == null) {
-        error "Please provide a sample-list file via --sample"
+    if (params.from_meta != null) {
+        // load existing metadata file
+        cram_metadata = Channel.fromPath(params.filtered_meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
     }
-    // read sample names from file
-    samples = Channel.fromPath(params.sample, checkIfExists: true).splitCsv().flatten()
+    else {
+        // find all files and their metadata for a given list of samples
+        findcrams()
+        cram_metadata = findcrams.out.splitCsv( header: true , sep: '\t')
+    }
 
-    // find all files and their metadata for a given list of samples
-    findcrams(samples)
-    cram_metadata = findcrams.out.splitCsv( header: true , sep: '\t')
-    //cram_metadata.view()
-    //.splitCsv( header: ['sample', 'cram_path', 'fastq_name', 'sample_supplier_name', 'library_type', 'total_reads_irods'], skip: 1 , sep: '\t')
-
-    // Download cram data
-    if (params.meta == false) {
+    // download cram data
+    if (params.only_meta == false) {
          downloadcrams(cram_metadata)
     }
 }

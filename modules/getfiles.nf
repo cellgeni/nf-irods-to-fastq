@@ -10,6 +10,7 @@ def downloadCramError(sample) {
 // There was a time where irods would bug out and not report an error when there was one
 process downloadCram {
     label "normal4core"
+    tag "Loading ${meta['cram_path']}"
     errorStrategy {task.exitStatus == 1 ? downloadCramError(sample) : 'terminate'}
     maxForks 10
     input:
@@ -42,9 +43,12 @@ process downloadCram {
 // Indices live in the BC tag, and a dual index is signalled by the presence of "-"
 // Remove any empty (index) files at the end, let's assume no more than 50 bytes big
 process cramToFastq {
-    publishDir "${params.publish_dir}", mode: "copy", overwrite: true
     label "normal4core"
+    tag "Converting cram to fastq: ${meta['cram_path']}"
+    publishDir "${params.publish_dir}", mode: "copy", overwrite: true
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
+    errorStrategy 'retry'
+    maxRetries 3
     input:
         tuple path(cram_file), val(meta)
     output:

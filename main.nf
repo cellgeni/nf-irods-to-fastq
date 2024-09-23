@@ -6,16 +6,40 @@ include { downloadCram } from './modules/getfiles.nf'
 include { cramToFastq } from './modules/getfiles.nf'
 
 
+def helpMessage() {
+    log.info"""
+    =======================
+    iRODS to FASTQ pipeline
+    =======================
+    This pipeline pulls samples from iRODS along with their metadata and converts them to fastq files.
+    Usage: nextflow run main.nf [OPTIONS]
+        options:
+            --samples=path/to/samples.csv       specify a .csv file with sample names to run a metadata search
+            --from_meta=path/to/metadata.csv    download files from IRODS listed in .tsv file and convert them to fastq
+            --run_all                           run metadata search and load the files in resulting metadata file
 
-workflow findcrams {
+    Examples:
+        1. Run a metadata search for a specified list of samples:
+            nextflow run main.nf --samples examples/samples.csv
+
+        2. Download cram files (specified in metadata.csv) from IRODS and convert them to fastq
+            nextflow run main.nf --from_meta metadata/metadata.tsv
+        
+        3. Run metadata search and load the files from resulting metadata file
+            nextflow run main.nf --samples examples/samples.csv --run_all
+
+    == samples.csv format ==
+    UK-CIC10690382
+    UK-CIC10690383
+    ========================
+    """.stripIndent()
+}
+
+
+workflow findmeta {
+    take:
+        samples
     main:
-        // We need some sort of sample information to download
-        if (params.samples == null) {
-            error "Please provide a sample-list file via --sample"
-        }
-        // read sample names from file
-        samples = Channel.fromPath(params.samples, checkIfExists: true).splitCsv().flatten()
-
         // find all cram files for all samples
         cram_path = findCrams(samples).splitCsv()
 
@@ -44,18 +68,27 @@ workflow downloadcrams {
 }
 
 workflow {
-    if (params.from_meta != null) {
+    // We need some sort of sample information to download
+    if (params.samples == null && params.from_meta == null) {
+        helpMessage()
+        error "Please provide a list of samples file via --samples or metadata file via --from_meta"
+    }
+
+    if (params.from_meta == null) {
+        // read sample names from file
+        samples = Channel.fromPath(params.samples, checkIfExists: true).splitCsv().flatten()
+        // find cram metadata
+        findmeta(samples)
+        cram_metadata = findmeta.out.splitCsv( header: true , sep: '\t')
+        
+    }
+    else {
         // load existing metadata file
         cram_metadata = Channel.fromPath(params.from_meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
     }
-    else {
-        // find all files and their metadata for a given list of samples
-        findcrams()
-        cram_metadata = findcrams.out.splitCsv( header: true , sep: '\t')
-    }
 
     // download cram data
-    if (params.only_meta == false) {
+    if (params.from_meta != null || params.run_all != null) {
          downloadcrams(cram_metadata)
     }
 }

@@ -41,19 +41,12 @@ workflow downloadcrams {
         
         // convert cram files to fastq
         fastq_files = cramToFastq(crams)
-    workflow.onComplete {
-        log.info "Workflow completed at: ${workflow.complete}"
-        log.info "Time taken: ${workflow.duration}"
-        log.info "Execution status: ${workflow.success ? 'success' : 'failed'}"
-        log.info "Error: $workflow.errorMessage"
-    }
-
 }
 
 workflow {
     if (params.from_meta != null) {
         // load existing metadata file
-        cram_metadata = Channel.fromPath(params.filtered_meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
+        cram_metadata = Channel.fromPath(params.from_meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
     }
     else {
         // find all files and their metadata for a given list of samples

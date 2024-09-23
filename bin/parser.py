@@ -17,7 +17,7 @@ META_COLUMNS = [
     "sample_supplier_name",
     "library_type",
     "total_reads",
-    "md5"
+    "md5",
 ]
 
 

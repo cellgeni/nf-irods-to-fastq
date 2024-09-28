@@ -98,8 +98,6 @@ process calculateReadLength {
 process saveMetaToJson {
     label "easy"
     tag "Updating metadata for: ${meta['cram_path']}"
-    beforeScript {"mkdir -p ../../../tmp/"}
-    afterScript {"rm ../../../tmp/${meta['fastq_name']}.json"}
     input:
         tuple path(fastq, stageAs: "*.fastq.gz"), val(meta)
     output:
@@ -110,6 +108,9 @@ process saveMetaToJson {
         def jsonContent = JsonOutput.toJson(meta)
         // Formats the JSON string to be more human-readable
         def prettyJson = JsonOutput.prettyPrint(jsonContent)
+        // Make a temporary dir
+        File directory = new File('tmp');
+        if (!directory.exists()) { directory.mkdir()}
         // Write the JSON content to a file
         def jsonFile = new File("tmp/${meta['fastq_name']}.json")
         // The groovy script execution is happening in working directory of the script
@@ -118,5 +119,4 @@ process saveMetaToJson {
         """
         mv ../../../tmp/${meta['fastq_name']}.json \$PWD
         """
-
 }

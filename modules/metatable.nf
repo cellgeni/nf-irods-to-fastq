@@ -61,13 +61,15 @@ process parseMetadata {
 
 // Save all metadata to csv file
 process combineMetadata {
+    debug true
     label "easy"
     tag "Combining the metadata for all files to metadata.csv"
-    publishDir "metadata", mode: "copy", overwrite: true
+    publishDir "metadata", mode: "copy", overwrite: true, saveAs: { filename -> filename.endsWith('.log') ? 'metadata.log' : filename }
     input:
         path('input/*.json')
     output:
-        path("metadata.tsv")
+        path("metadata.tsv"), emit: metadata
+        path('.command.log'), emit: log
     script:
         """
         combine_meta.py ./input/

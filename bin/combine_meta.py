@@ -5,7 +5,13 @@ import sys
 import json
 import csv
 import re
-from typing import Set, List, Dict
+from typing import Set, List, Dict, Any
+from collections import defaultdict
+
+
+WARNING_COLOR = "\033[93m"
+INFO_COLOR = "\n\033[94m"
+ENDC = "\033[0m"
 
 
 def make_unique_names(
@@ -50,6 +56,83 @@ def add_read_type(library_type: str, i2len: str) -> Dict[str, str]:
         return {"I1": "I1", "I2": "I2", "R1": "R1", "R2": "R2"}
 
 
+def get_sampleindex(meta_list: List[Dict[str, Any]]) -> Dict[str, int]:
+    """
+    Get an indexes of all unique samples
+    meta_list (List[Dict[str, Any]]): a list containing metadata for all samples
+    return (Dict[str, int]): indexes of all unique samples in the list
+    """
+    sample_index = defaultdict(list)
+    for i, sample_meta in enumerate(meta_list):
+        sample_index[sample_meta["sample"]].append(i)
+    return sample_index
+
+
+def validate_consistency(
+    meta_list: List[Dict[str, Any]], column: str, warning_messages: List[str]
+) -> None:
+    """
+    Check if there are multiple values in `column`
+    meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
+    column (str): a column of interest in `meta_list`
+    warning_messages (List[str]): a list of warning for particular sample
+    """
+    # get unique values
+    unique_values = {meta.get(column, "NaN") for meta in meta_list}
+    if len(unique_values) > 1:
+        # make a warning message
+        warning_title = f"{WARNING_COLOR}WARNING! There are multiple values of {column} available: {ENDC}"
+        warning_message = warning_title + ",".join(unique_values)
+        warning_messages.append(warning_message)
+
+
+def validate_readcounts(
+    meta_list: List[Dict[str, Any]], warning_messages: List[str]
+) -> None:
+    """
+    Check if there IRODS total_counts equals samtools output
+    meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
+    warning_messages (List[str]): a list of warning for particular sample
+    """
+    # get samples with inconsistent total number of reads
+    warning_list = [
+        cram_meta["cram_path"]
+        for cram_meta in meta_list
+        if cram_meta["total_reads"] != cram_meta["num_reads_processed"]
+    ]
+    if warning_list:
+        # make a warning message
+        warning_title = f"{WARNING_COLOR}WARNING! IRODS total_count != num_reads_processed for samples: {ENDC}"
+        warning_message = warning_title + ",".join(warning_list)
+        warning_messages.append(warning_message)
+
+
+def validate_metalist(meta_list: List[Dict[str, Any]]) -> None:
+    """
+    Validates metadata values in a list of columns
+    meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
+    warning_messages (List[str]): a list of warning for particular sample
+    """
+    # get sample indexes
+    sample_index = get_sampleindex(meta_list)
+
+    # validate cram files for each sample
+    for sample, indexes in sample_index.items():
+        warning_messages = list()
+        # subsample metadata list
+        subsample_metalist = [meta_list[idx] for idx in indexes]
+        # validate metadata
+        validate_consistency(subsample_metalist, "library_type", warning_messages)
+        validate_readcounts(subsample_metalist, warning_messages)
+        validate_consistency(subsample_metalist, "r1len", warning_messages)
+        validate_consistency(subsample_metalist, "r2len", warning_messages)
+
+        # raise warnings
+        if warning_messages:
+            print(f"{INFO_COLOR}INFO: Sample {sample}:{ENDC}")
+            print(*warning_messages, sep="\n")
+
+
 def main() -> None:
     # read positional argument with filedir path
     dirpath = sys.argv[1].strip("/")
@@ -80,6 +163,10 @@ def main() -> None:
 
     # sort the the data by sample name
     meta_list = sorted(meta_list, key=lambda x: x["sample"])
+
+    # validate metadata
+    if "num_reads_processed" in sample_meta.keys():
+        validate_metalist(meta_list)
 
     # write all metadata to csv
     with open("metadata.tsv", mode="w") as csv_file:

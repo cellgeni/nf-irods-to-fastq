@@ -54,7 +54,7 @@ workflow findmeta {
         // write metadata to csv file
        combineMetadata(parsed_meta.collect())
     emit:
-        combineMetadata.out
+        combineMetadata.out.metadata
 }
 
 
@@ -80,8 +80,9 @@ workflow downloadcrams {
         json_ch = saveMetaToJson.out.json.collect()
 
         // update metadata file
-        metadata = updateMetadata(json_ch)
-        metadata.view()
+        updateMetadata(json_ch)
+    emit:
+        updateMetadata.out.metadata
 }
 
 workflow {

@@ -1,3 +1,5 @@
+import groovy.json.JsonOutput
+
 // functrion with error message if there are MD5 sums do not match
 def downloadCramError(sample) {
     log.warn "md5sum conflict encountered for sample $sample"
@@ -9,7 +11,7 @@ def downloadCramError(sample) {
 // Perform the md5sum check locally rather than via iget -K
 // There was a time where irods would bug out and not report an error when there was one
 process downloadCram {
-    label "normal4core"
+    label "easy"
     tag "Loading ${meta['cram_path']}"
     errorStrategy {task.exitStatus == 1 ? downloadCramError(sample) : 'terminate'}
     maxForks 10
@@ -43,16 +45,14 @@ process downloadCram {
 // Indices live in the BC tag, and a dual index is signalled by the presence of "-"
 // Remove any empty (index) files at the end, let's assume no more than 50 bytes big
 process cramToFastq {
-    label "normal4core"
+    label "easy"
     tag "Converting cram to fastq: ${meta['cram_path']}"
     publishDir "${params.publish_dir}", mode: "copy", overwrite: true
     container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
-    errorStrategy 'retry'
-    maxRetries 3
     input:
         tuple path(cram_file), val(meta)
     output:
-        tuple path("*.fastq.gz"), val(meta)
+        tuple path("*.fastq.gz"), val(meta), env(num_reads_processed)
     script:
         """
         export REF_PATH=${params.REF_PATH}
@@ -71,5 +71,52 @@ process cramToFastq {
             samtools view -b $cram_file | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -@ ${task.cpus} -1 ${meta['fastq_name']}_R1_001.fastq.gz -2 ${meta['fastq_name']}_R2_001.fastq.gz --i1 ${meta['fastq_name']}_I1_001.fastq.gz --i2 ${meta['fastq_name']}_I2_001.fastq.gz --index-format \$ISTRING -n -
         fi
         find . -type f -name "*.fastq.gz" -size -50c -exec rm {} \\;
+        num_reads_processed=\$(grep "processed" .command.log | sed 's/.*processed //; s/ reads//')
         """
+}
+
+
+process calculateReadLength {
+    debug true
+    label "easy"
+    tag "Calculating read-length for: ${meta['cram_path']}"
+    input:
+        tuple path("*"), val(meta)
+    output:
+        tuple path("*.fastq.gz", includeInputs: true), val(meta), env(r1len), env(r2len), env(i1len), env(i2len)
+    script:
+        """
+        export r1len="NaN" r2len="NaN" i1len="NaN" i2len="NaN"
+        for file in *.fastq.gz
+        do
+            readtype=\$(echo \$file | cut -d '_' -f4)
+            export "\${readtype,,}len"=\$(zcat ${meta["fastq_name"]}_\${readtype}_001.fastq.gz | awk 'NR%4==2' | head -1000 | awk '{sum += length(\$0) } END {print sum/NR}')
+        done
+        """
+}
+
+process saveMetaToJson {
+    label "easy"
+    tag "Updating metadata for: ${meta['cram_path']}"
+    beforeScript {"mkdir -p ../../../tmp/"}
+    afterScript {"rm ../../../tmp/${meta['fastq_name']}.json"}
+    input:
+        tuple path(fastq, stageAs: "*.fastq.gz"), val(meta)
+    output:
+        tuple path('*.fastq.gz', includeInputs: true), val(meta), emit: fastq
+        path '*.json', emit: json
+    script:
+        // Convert the map to JSON format
+        def jsonContent = JsonOutput.toJson(meta)
+        // Formats the JSON string to be more human-readable
+        def prettyJson = JsonOutput.prettyPrint(jsonContent)
+        // Write the JSON content to a file
+        def jsonFile = new File("tmp/${meta['fastq_name']}.json")
+        // The groovy script execution is happening in working directory of the script
+        // So we need to move the .json file to the correct dirrectory
+        jsonFile.write(prettyJson)
+        """
+        mv ../../../tmp/${meta['fastq_name']}.json \$PWD
+        """
+
 }

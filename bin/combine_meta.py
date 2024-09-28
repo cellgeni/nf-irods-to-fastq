@@ -5,7 +5,7 @@ import sys
 import json
 import csv
 import re
-from typing import Set, List
+from typing import Set, List, Dict
 
 
 def make_unique_names(
@@ -16,6 +16,7 @@ def make_unique_names(
     sample_fastq_name (str): Current fastq file name
     unique_tags (set[int]): A set of tags that are available for use
     fastq_names (list[str]): A list of fastq_names that are currently in use
+    return (str): a new unique basename for a fastq file
     """
     # get tag id from fastq file name
     sample_tag = re.search("_S(\d+)_", sample_fastq_name).group(1)
@@ -36,7 +37,20 @@ def make_unique_names(
     return sample_fastq_name
 
 
-def main():
+def add_read_type(library_type: str, i2len: str) -> Dict[str, str]:
+    """
+    Adds readtype names for all files
+    library_type (str): a sequencing library type information
+    i2len (str): an average length of index 2
+    return (dict[str]): a dict of read types for a fastq file
+    """
+    if "atac" in library_type.lower() and i2len == "24":
+        return {"I1": "I1", "I2": "R2", "R1": "R1", "R2": "R3"}
+    else:
+        return {"I1": "I1", "I2": "I2", "R1": "R1", "R2": "R2"}
+
+
+def main() -> None:
     # read positional argument with filedir path
     dirpath = sys.argv[1].strip("/")
     number_of_samples = len(os.listdir("./input/"))
@@ -51,9 +65,14 @@ def main():
             # reading the json file
             sample_meta = json.load(file)
             # making fastq_name unique
-            sample_meta["fastq_name"] = make_unique_names(
-                sample_meta["fastq_name"], unique_tags, fastq_names
-            )
+            if "num_reads_processed" in sample_meta.keys():
+                sample_meta.update(
+                    add_read_type(sample_meta["library_type"], sample_meta["i2len"])
+                )
+            else:
+                sample_meta["fastq_name"] = make_unique_names(
+                    sample_meta["fastq_name"], unique_tags, fastq_names
+                )
             meta_list.append(sample_meta)
 
     # save the field names

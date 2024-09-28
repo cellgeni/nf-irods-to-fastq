@@ -1,9 +1,11 @@
 include { findCrams } from './modules/metatable.nf'
 include { getMetadata } from './modules/metatable.nf'
 include { parseMetadata } from './modules/metatable.nf'
-include { combineMetadata } from './modules/metatable.nf'
+include { combineMetadata;  combineMetadata as updateMetadata} from './modules/metatable.nf'
 include { downloadCram } from './modules/getfiles.nf'
 include { cramToFastq } from './modules/getfiles.nf'
+include { calculateReadLength } from './modules/getfiles.nf'
+include { saveMetaToJson } from './modules/getfiles.nf'
 
 
 def helpMessage() {
@@ -55,6 +57,7 @@ workflow findmeta {
         combineMetadata.out
 }
 
+
 workflow downloadcrams {
     take:
         cram_metadata
@@ -65,6 +68,20 @@ workflow downloadcrams {
         
         // convert cram files to fastq
         fastq_files = cramToFastq(crams)
+                                .map { fastqfiles, meta, num_reads_processed -> [fastqfiles, meta + ['num_reads_processed': num_reads_processed]] }
+
+        // calculate read length
+        length = calculateReadLength(fastq_files)
+                                .map { fastqfiles, meta, r1len, r2len, i1len, i2len -> [fastqfiles, meta + ['r1len': r1len, 'r2len': r2len, 'i1len': i1len, 'i2len': i2len]] }
+
+        // save metadata to json file
+        saveMetaToJson(length)
+        fastq_ch = saveMetaToJson.out.fastq
+        json_ch = saveMetaToJson.out.json.collect()
+
+        // update metadata file
+        metadata = updateMetadata(json_ch)
+        metadata.view()
 }
 
 workflow {

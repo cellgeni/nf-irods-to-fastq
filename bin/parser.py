@@ -59,7 +59,7 @@ def check_library_type(metadata_list: List[Dict[str, Any]]) -> str:
         print(*unique_library_types, sep="\n")
 
 
-def make_fastqname(metadata_list: List[Dict[str, Any]]):
+def make_fastqname(metadata_list: List[Dict[str, Any]]) -> None:
     """
     Make a name for fastq file according to the CellRanger's naming convention
     https://www.10xgenomics.com/support/software/cell-ranger/latest/analysis/inputs/cr-specifying-fastqs
@@ -80,7 +80,7 @@ def make_fastqname(metadata_list: List[Dict[str, Any]]):
         meta["fastq_name"] = f"{sample_name}_S{sample_idx}_L{lane_idx.zfill(3)}"
 
 
-def main():
+def main() -> None:
     # read positional argument with file path
     dirpath = sys.argv[1].strip("/")
 

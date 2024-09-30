@@ -43,19 +43,6 @@ def make_unique_names(
     return sample_fastq_name
 
 
-def add_read_type(library_type: str, i2len: str) -> Dict[str, str]:
-    """
-    Adds readtype names for all files
-    library_type (str): a sequencing library type information
-    i2len (str): an average length of index 2
-    return (dict[str]): a dict of read types for a fastq file
-    """
-    if "atac" in library_type.lower() and i2len == "24":
-        return {"I1": "I1", "I2": "R2", "R1": "R1", "R2": "R3"}
-    else:
-        return {"I1": "I1", "I2": "I2", "R1": "R1", "R2": "R2"}
-
-
 def get_sampleindex(meta_list: List[Dict[str, Any]]) -> Dict[str, int]:
     """
     Get an indexes of all unique samples
@@ -102,7 +89,25 @@ def validate_readcounts(
     ]
     if warning_list:
         # make a warning message
-        warning_title = f"{WARNING_COLOR}WARNING! IRODS total_count != num_reads_processed for samples: {ENDC}"
+        warning_title = f"{WARNING_COLOR}WARNING! IRODS total_count != num_reads_processed for files: {ENDC}"
+        warning_message = warning_title + ",".join(warning_list)
+        warning_messages.append(warning_message)
+
+
+def validate_atac(meta_list: List[Dict[str, Any]], warning_messages: List[str]) -> None:
+    """
+    Check if there IRODS total_counts equals samtools output
+    meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
+    warning_messages (List[str]): a list of warning for particular sample
+    """
+    warning_list = [
+        cram_meta["cram_path"]
+        for cram_meta in meta_list
+        if "atac" in cram_meta["library_type"].lower() and cram_meta["i2len"] == "24"
+    ]
+    if warning_list:
+        # make a warning message
+        warning_title = f"{WARNING_COLOR}WARNING! The following files are suspected to be 10X ATAC. They were renamed according to CellRanger naming convention : {ENDC}"
         warning_message = warning_title + ",".join(warning_list)
         warning_messages.append(warning_message)
 
@@ -126,6 +131,7 @@ def validate_metalist(meta_list: List[Dict[str, Any]]) -> None:
         validate_readcounts(subsample_metalist, warning_messages)
         validate_consistency(subsample_metalist, "r1len", warning_messages)
         validate_consistency(subsample_metalist, "r2len", warning_messages)
+        validate_atac(subsample_metalist, warning_messages)
 
         # raise warnings
         if warning_messages:
@@ -148,11 +154,7 @@ def main() -> None:
             # reading the json file
             sample_meta = json.load(file)
             # making fastq_name unique
-            if "num_reads_processed" in sample_meta.keys():
-                sample_meta.update(
-                    add_read_type(sample_meta["library_type"], sample_meta["i2len"])
-                )
-            else:
+            if "num_reads_processed" not in sample_meta.keys():
                 sample_meta["fastq_name"] = make_unique_names(
                     sample_meta["fastq_name"], unique_tags, fastq_names
                 )

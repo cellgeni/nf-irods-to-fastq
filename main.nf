@@ -6,7 +6,10 @@ include { downloadCram } from './modules/getfiles.nf'
 include { cramToFastq } from './modules/getfiles.nf'
 include { calculateReadLength } from './modules/getfiles.nf'
 include { saveMetaToJson } from './modules/getfiles.nf'
+include { checkATAC } from './modules/getfiles.nf'
+include { renameATAC } from './modules/getfiles.nf'
 
+nextflow.preview.output = true
 
 def helpMessage() {
     log.info"""
@@ -74,15 +77,27 @@ workflow downloadcrams {
         length = calculateReadLength(fastq_files)
                                 .map { fastqfiles, meta, r1len, r2len, i1len, i2len -> [fastqfiles, meta + ['r1len': r1len, 'r2len': r2len, 'i1len': i1len, 'i2len': i2len]] }
 
+        // rename 10X ATAC files if there are such
+        length.branch {
+            fastq, meta ->
+            atac: checkATAC(meta['library_type'], meta['i2len'], meta['fastq_name'])
+            other: true
+        }
+        .set { fastq_ch }
+
+        renameATAC(fastq_ch.atac)
+
+        combined_fastq = fastq_ch.other.concat(renameATAC.out)
+        
         // save metadata to json file
-        saveMetaToJson(length)
-        fastq_ch = saveMetaToJson.out.fastq
-        json_ch = saveMetaToJson.out.json.collect()
+        json_ch = saveMetaToJson(combined_fastq).collect()
 
         // update metadata file
-        updateMetadata(json_ch)
-    emit:
-        updateMetadata.out.metadata
+        metadata = updateMetadata(json_ch)
+    publish:
+        combined_fastq >> '.'
+        metadata >> 'metadata'
+        
 }
 
 workflow {
@@ -109,4 +124,10 @@ workflow {
     if (params.from_meta != null || params.run_all != null) {
          downloadcrams(cram_metadata)
     }
+}
+
+output {
+    directory 'results'
+    mode 'copy'
+    overwrite true
 }

@@ -7,40 +7,28 @@ import csv
 import re
 from typing import Set, List, Dict, Any
 from collections import defaultdict
+import argparse
 
 
 WARNING_COLOR = "\033[93m"
 INFO_COLOR = "\n\033[94m"
 ENDC = "\033[0m"
 
-
-def make_unique_names(
-    sample_fastq_name: str, unique_tags: Set[int], fastq_names: List[str]
-) -> str:
-    """
-    Creates a unique filename
-    sample_fastq_name (str): Current fastq file name
-    unique_tags (set[int]): A set of tags that are available for use
-    fastq_names (list[str]): A list of fastq_names that are currently in use
-    return (str): a new unique basename for a fastq file
-    """
-    # get tag id from fastq file name
-    sample_tag = re.search("_S(\d+)_", sample_fastq_name).group(1)
-
-    # check if filename is already in use
-    if sample_fastq_name in fastq_names:
-        unique_tag = unique_tags.pop()
-        sample_fastq_name = sample_fastq_name.replace(
-            f"_S{sample_tag}_", f"_S{unique_tag}_"
-        )
-        print(
-            f"Filename changed from {sample_fastq_name.replace(f'_S{unique_tag}_', f'_S{sample_tag}_')} to {sample_fastq_name}"
-        )
-
-    # add filename to the list and remove sample_tag from taglist
-    fastq_names.append(sample_fastq_name)
-    unique_tags = unique_tags - {int(sample_tag)}
-    return sample_fastq_name
+PARSER = argparse.ArgumentParser(
+    description="Reads metadata from a set of .json files and combines everything to a .tsv file"
+)
+PARSER.add_argument(
+    "dir",
+    metavar="dir",
+    type=str,
+    help="specify a path to the directory with a set of .json files you want to combine",
+)
+PARSER.add_argument(
+    "-a",
+    "--validate_all",
+    help="if specified runs all validation steps, if not runs library type validation only",
+    action="store_true",
+)
 
 
 def get_sampleindex(meta_list: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -53,6 +41,20 @@ def get_sampleindex(meta_list: List[Dict[str, Any]]) -> Dict[str, int]:
     for i, sample_meta in enumerate(meta_list):
         sample_index[sample_meta["sample"]].append(i)
     return sample_index
+
+
+def validate_filenames(meta_list: List[Dict[str, Any]]) -> None:
+    """
+    Check if there are duplicated filenames of fastq files in the metadata list
+    meta_list (List[Dict[str, Any]]): a list containing metadata for all samples
+    """
+    # get duplicated filenames
+    filenames = [meta["fastq_name"] for meta in meta_list]
+    duplicated_filenames = {name for name in filenames if filenames.count(name) > 1}
+    # raise a warning
+    if len(duplicated_filenames) != 0:
+        print(f"{WARNING_COLOR}WARNING! There are duplicated filenames: {ENDC}")
+        print(*duplicated_filenames, sep="\n")
 
 
 def validate_consistency(
@@ -112,7 +114,7 @@ def validate_atac(meta_list: List[Dict[str, Any]], warning_messages: List[str]) 
         warning_messages.append(warning_message)
 
 
-def validate_metalist(meta_list: List[Dict[str, Any]]) -> None:
+def validate_metalist(meta_list: List[Dict[str, Any]], validate_all: bool) -> None:
     """
     Validates metadata values in a list of columns
     meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
@@ -121,6 +123,9 @@ def validate_metalist(meta_list: List[Dict[str, Any]]) -> None:
     # get sample indexes
     sample_index = get_sampleindex(meta_list)
 
+    # check if there are dulicated filenames
+    validate_filenames(meta_list)
+
     # validate cram files for each sample
     for sample, indexes in sample_index.items():
         warning_messages = list()
@@ -128,10 +133,11 @@ def validate_metalist(meta_list: List[Dict[str, Any]]) -> None:
         subsample_metalist = [meta_list[idx] for idx in indexes]
         # validate metadata
         validate_consistency(subsample_metalist, "library_type", warning_messages)
-        validate_readcounts(subsample_metalist, warning_messages)
-        validate_consistency(subsample_metalist, "r1len", warning_messages)
-        validate_consistency(subsample_metalist, "r2len", warning_messages)
-        validate_atac(subsample_metalist, warning_messages)
+        if validate_all:
+            validate_readcounts(subsample_metalist, warning_messages)
+            validate_consistency(subsample_metalist, "r1len", warning_messages)
+            validate_consistency(subsample_metalist, "r2len", warning_messages)
+            validate_atac(subsample_metalist, warning_messages)
 
         # raise warnings
         if warning_messages:
@@ -140,24 +146,19 @@ def validate_metalist(meta_list: List[Dict[str, Any]]) -> None:
 
 
 def main() -> None:
+    # parse arguments
+    args = PARSER.parse_args()
+
     # read positional argument with filedir path
-    dirpath = sys.argv[1].strip("/")
-    number_of_samples = len(os.listdir("./input/"))
+    dirpath = args.dir.strip("/")
 
     # read all json files to meta_list
     meta_list = list()
-    fastq_names = list()
-    unique_tags = set(range(1, number_of_samples))
 
     for filename in os.listdir(dirpath):
         with open(f"{dirpath}/{filename}", "r") as file:
             # reading the json file
             sample_meta = json.load(file)
-            # making fastq_name unique
-            if "num_reads_processed" not in sample_meta.keys():
-                sample_meta["fastq_name"] = make_unique_names(
-                    sample_meta["fastq_name"], unique_tags, fastq_names
-                )
             meta_list.append(sample_meta)
 
     # save the field names
@@ -167,8 +168,7 @@ def main() -> None:
     meta_list = sorted(meta_list, key=lambda x: x["sample"])
 
     # validate metadata
-    if "num_reads_processed" in sample_meta.keys():
-        validate_metalist(meta_list)
+    validate_metalist(meta_list, args.validate_all)
 
     # write all metadata to csv
     with open("metadata.tsv", mode="w") as csv_file:

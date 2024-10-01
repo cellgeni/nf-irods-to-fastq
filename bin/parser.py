@@ -45,20 +45,6 @@ def parse_txt(filepath: str) -> Dict[str, Any]:
     return meta_parsed
 
 
-def check_library_type(metadata_list: List[Dict[str, Any]]) -> str:
-    """
-    Check if there are multiple library types available for the cram file
-    meta (List[Dict[str]]): A metadata list for all cram files that are available for particular sample
-    """
-    sample_name = metadata_list[0]["sample"]
-    unique_library_types = {meta.get("library_type", "NaN") for meta in metadata_list}
-    if len(unique_library_types) > 1:
-        print(
-            f"{WARNING_COLOR}WARNING! There are multiple library types available for sample {sample_name}:{ENDC}"
-        )
-        print(*unique_library_types, sep="\n")
-
-
 def make_fastqname(metadata_list: List[Dict[str, Any]]) -> None:
     """
     Make a name for fastq file according to the CellRanger's naming convention
@@ -92,9 +78,6 @@ def main() -> None:
 
     # make unique fastq names
     make_fastqname(metadata_list)
-
-    # check library types
-    check_library_type(metadata_list)
 
     # parse the metadata
     for meta in metadata_list:

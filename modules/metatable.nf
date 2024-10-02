@@ -1,4 +1,3 @@
-
 // functrion with error message if there are no files for a sample
 def findCramsError(sample) {
     log.warn "No files found for sample $sample"
@@ -44,7 +43,7 @@ process getMetadata {
         """
 }
 
-// parse metadata for each sample
+// Parse metadata for each sample
 process parseMetadata {
     debug true
     label "easy"
@@ -59,7 +58,8 @@ process parseMetadata {
         """
 }
 
-// Save all metadata to csv file
+// Save all metadata to csv file and collect all warnings to .log file
+// The warnings a colored using ANSI escape sequences
 process combineMetadata {
     debug true
     label "easy"

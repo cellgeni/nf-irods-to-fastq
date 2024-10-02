@@ -10,7 +10,7 @@ def getSampleName(fastq_path) {
 
 // Concat fastq files before publishing them
 process concatFastqs {
-    label "easy"
+    label "normal"
     input:
         tuple val(sample), path(fastqs)
     output:

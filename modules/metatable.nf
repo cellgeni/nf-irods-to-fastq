@@ -7,7 +7,7 @@ def findCramsError(sample) {
 // Prepare a list of the CRAMs for the sample
 // Store the sample ID and the CRAM path in a CSV file for subsequent merging
 process findCrams {
-    label "easy"
+    label "local"
     tag "Searching files for sample $sample"
     errorStrategy {task.exitStatus == 1 ? findCramsError(sample) : 'terminate'}
     maxForks 10
@@ -31,7 +31,7 @@ process findCrams {
 
 // Get the metadata for each sample
 process getMetadata {
-    label "easy"
+    label "local"
     tag "Getting metadata for $cram_path"
     input:
         tuple val(sample), val(cram_path)
@@ -46,7 +46,7 @@ process getMetadata {
 // Parse metadata for each sample
 process parseMetadata {
     debug true
-    label "easy"
+    label "local"
     tag "Parsing metadata for $sample"
     input:
         tuple val(sample), path("input/*.txt")
@@ -65,7 +65,7 @@ process parseMetadata {
 // by semicolons. m is the final character of the sequence that applies the style.
 process combineMetadata {
     debug true
-    label "easy"
+    label "local"
     tag "Combining the metadata for all files to metadata.csv"
     publishDir "metadata", mode: "copy", overwrite: true
     input:

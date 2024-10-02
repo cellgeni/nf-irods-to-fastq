@@ -84,6 +84,8 @@ process cramToFastq {
 }
 
 // Calculate a read length for each .fastq.gz file
+// Regular expression in sed command matches a read type for fastq name of format
+// [Sample Name]_S[Sample Number]_L00[Lane number]_[Read type]_001.fastq.gz
 process calculateReadLength {
     label "easy"
     tag "Calculating read-length for: ${meta['cram_path']}"

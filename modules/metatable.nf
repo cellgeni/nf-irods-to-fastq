@@ -59,7 +59,10 @@ process parseMetadata {
 }
 
 // Save all metadata to csv file and collect all warnings to .log file
-// The warnings a colored using ANSI escape sequences
+// The warnings a colored using ANSI escape sequences. So sed command matches
+// the ANSI escape sequences used for colors. \x1b is the escape character (ESC),
+// [ indicates the start of a control sequence, and [0-9;]* captures numbers separated
+// by semicolons. m is the final character of the sequence that applies the style.
 process combineMetadata {
     debug true
     label "easy"

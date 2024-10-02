@@ -134,8 +134,11 @@ workflow uploadtoftp {
 }
 
 workflow {
-    // We need some sort of sample information to download
-    if (params.findmeta == null && params.cram2fastq == false && params.toftp == false) {
+    // Validate input options
+    if (params.help) {
+        helpMessage()
+        System.exit(0)
+    } else if (params.findmeta == null && params.cram2fastq == false && params.toftp == false) {
         helpMessage()
         error "Please use one of the methods listed above"
     // Run findmeta workflow

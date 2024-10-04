@@ -77,12 +77,10 @@ process combineMetadata {
         if (task.process == 'findmeta:combineMetadata') {
             """
             combine_meta.py ./input/
-            sed 's/\\x1b\\[[0-9;]*m//g' .command.log > metadata.log
             """
         } else if (task.process == 'downloadcrams:updateMetadata'){
             """
             combine_meta.py --validate_all ./input/
-            sed 's/\\x1b\\[[0-9;]*m//g' .command.log > metadata.log
             """
         } else {
             error "Invalid process name: $task.process"

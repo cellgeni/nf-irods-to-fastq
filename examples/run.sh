@@ -12,5 +12,6 @@ export PATH="/software/singularity/v3.10.0/bin:$PATH"
 META="/path/to/samples.csv"
 
 nextflow run main.nf \
-    --meta "${META}" \
+    --findmeta "${META}" \
+    --cram2fastq \
     -resume

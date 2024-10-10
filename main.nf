@@ -98,7 +98,7 @@ workflow downloadcrams {
         // rename 10X ATAC files if there are such
         length.branch {
             fastq, meta ->
-            atac: checkATAC(meta['library_type'], meta['i2len'], meta['fastq_name'])
+            atac: checkATAC(meta['library_type'], meta['i2len'], meta['fastq_prefix'])
             other: true
         }
         .set { fastq_ch }

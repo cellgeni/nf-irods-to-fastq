@@ -83,11 +83,11 @@ def validate_filenames(meta_list: List[Dict[str, Any]]) -> None:
     meta_list (List[Dict[str, Any]]): a list containing metadata for all samples
     """
     # get duplicated filenames
-    filenames = [meta["fastq_name"] for meta in meta_list]
+    filenames = [meta["fastq_prefix"] for meta in meta_list]
     duplicated_filenames = {name for name in filenames if filenames.count(name) > 1}
     # raise a warning
     if len(duplicated_filenames) != 0:
-        message = "There are duplicated filenames:" + "\n".join(duplicated_filenames)
+        message = "There are duplicated filenames:\n" + "\n".join(duplicated_filenames)
         logging.warning(message)
 
 

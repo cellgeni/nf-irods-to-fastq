@@ -13,7 +13,7 @@ ENDC = "\033[0m"
 META_COLUMNS = [
     "sample",
     "cram_path",
-    "fastq_name",
+    "fastq_prefix",
     "sample_supplier_name",
     "library_type",
     "total_reads",
@@ -45,17 +45,26 @@ def parse_txt(filepath: str) -> Dict[str, Any]:
     return meta_parsed
 
 
-def make_fastqname(metadata_list: List[Dict[str, Any]]) -> None:
+def make_fastqprefix(metadata_list: List[Dict[str, Any]]) -> None:
     """
     Make a name for fastq file according to the CellRanger's naming convention
     https://www.10xgenomics.com/support/software/cell-ranger/latest/analysis/inputs/cr-specifying-fastqs
     meta (List[Dict[str]]): A metadata list for all cram files that are available for particular sample
     """
+    # function that gets run_id + lane combination
+    get_runid_lane = lambda meta: f"{meta['id_run']}_{meta.get('lane', '1')}"
+
+    # sort metadata list
+    sorted_metadata = sorted(metadata_list, key=get_runid_lane)
+
     # a dict to write unique tags for each unique runid_lane
     cram_dict = defaultdict(list)
-    for meta in metadata_list:
+
+    # make unique prefix
+    for meta in sorted_metadata:
         # parse cram name to get run_id, lane and tag_id
-        runid_lane, tag_id = os.path.basename(meta["cram_path"]).split("#")
+        runid_lane, tag_id = get_runid_lane(meta), meta["tag_index"]
+        # add runid_lane + tag_id combination to the dict
         cram_dict[runid_lane].append(tag_id)
         # make a name for fastq file
         sample_name, sample_idx, lane_idx = (
@@ -63,12 +72,12 @@ def make_fastqname(metadata_list: List[Dict[str, Any]]) -> None:
             len(cram_dict[runid_lane]),
             str(len(cram_dict)),
         )
-        meta["fastq_name"] = f"{sample_name}_S{sample_idx}_L{lane_idx.zfill(3)}"
+        meta["fastq_prefix"] = f"{sample_name}_S{sample_idx}_L{lane_idx.zfill(3)}"
 
 
 def main() -> None:
     # read positional argument with file path
-    dirpath = sys.argv[1].strip("/")
+    dirpath = sys.argv[1].rstrip("/")
 
     # parse data for files in <dirpath>
     metadata_list = list()
@@ -77,12 +86,12 @@ def main() -> None:
         metadata_list.append(parse_txt(filepath))
 
     # make unique fastq names
-    make_fastqname(metadata_list)
+    make_fastqprefix(metadata_list)
 
     # parse the metadata
     for meta in metadata_list:
         # get a basename to save data
-        basename = meta["fastq_name"]
+        basename = os.path.basename(meta["cram_path"]).rstrip(".cram")
         # filter metadata
         meta_filtered = {col: meta.get(col, "NaN") for col in META_COLUMNS}
         # Dump processed meta to json

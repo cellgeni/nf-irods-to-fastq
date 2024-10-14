@@ -47,8 +47,9 @@ def parse_txt(filepath: str) -> Dict[str, Any]:
 
 def make_fastqprefix(metadata_list: List[Dict[str, Any]]) -> None:
     """
-    Make a name for fastq file according to the CellRanger's naming convention
+    Make a name for fastq file according to the CellRanger's naming convention (which is based on bcl2fastq naming convention)
     https://www.10xgenomics.com/support/software/cell-ranger/latest/analysis/inputs/cr-specifying-fastqs
+    https://support.illumina.com/help/BaseSpace_Sequence_Hub_OLH_009008_2/Source/Informatics/BS/NamingConvention_FASTQ-files-swBS.htm
     meta (List[Dict[str]]): A metadata list for all cram files that are available for particular sample
     """
     # function that gets run_id + lane combination
@@ -82,7 +83,7 @@ def main() -> None:
     # parse data for files in <dirpath>
     metadata_list = list()
     for filename in os.listdir(dirpath):
-        filepath = f"{dirpath}/{filename}"
+        filepath = os.path.join(dirpath,filename)
         metadata_list.append(parse_txt(filepath))
 
     # make unique fastq names
@@ -93,7 +94,7 @@ def main() -> None:
         # get a basename to save data
         basename = os.path.basename(meta["cram_path"]).rstrip(".cram")
         # filter metadata
-        meta_filtered = {col: meta.get(col, "NaN") for col in META_COLUMNS}
+        meta_filtered = {col: meta.get(col, "-") for col in META_COLUMNS}
         # Dump processed meta to json
         with open(f"{basename}.json", "w") as json_file:
             json.dump(meta_filtered, json_file)

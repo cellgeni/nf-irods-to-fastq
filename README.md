@@ -18,9 +18,9 @@ This Nextflow pipeline pulls samples from iRODS and converts them to FASTQ files
 * `--meta`: this argument spicifies the .tsv with cram files (potentially from `findmeta` step) to run cram2fastq conversion
 * `--publish_dir`: path to put the output filess of the pipeline. (default `'results'`)
 * `--index_format`: index-format formula for samtools, only if you really know what you're doing (default `"i*i*"`)
-* `--toftp`: upload the resulting files to an FTP (default `false`).
+* `--toftp`: upload the resulting files to the ArrayExpress FTP server (default `false`).
   *   Use in combination with `--ftp_credenials`, `--ftp_host` and `--ftp_path`
-*   `--fastqfiles`: this argument spicifies the .fastq.gz files (potentially from `cram2fastq` step) to upload them to ftp server
+*   `--fastqfiles`: this argument spicifies the .fastq.gz files (potentially from `cram2fastq` step) to upload them to the ArrayExpress ftp server
 
 ## Examples of use
 1. Run a metadata search for a specified list of samples:
@@ -28,7 +28,7 @@ This Nextflow pipeline pulls samples from iRODS and converts them to FASTQ files
 nextflow run main.nf --findmeta ./examples/samples.csv
 ```
 
-2. Download cram files (specified in metadata.csv) from IRODS and convert them to fastq
+2. Download cram files (specified in metadata.tsv) from IRODS and convert them to fastq
 ```shell
 nextflow run main.nf --cram2fastq --meta metadata/metadata.tsv
 ```

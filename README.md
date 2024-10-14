@@ -9,7 +9,7 @@ This Nextflow pipeline pulls samples from iRODS and converts them to FASTQ files
 * `nextflow.config` - the configuration script that controls the cluster scheduler, process and container
 * `bin/parser.py` - script that parses metadata from `imeta ls` output and saves it in `.json` format
 * `bin/combine_meta.py` - script that combines all metadata in `.json` format and saves it to `.tsv` file
-* `examples/samples.csv` - an example samples.csv file, contains one colum with sample names (header 'sample' is required).
+* `examples/samples.csv` - an example samples.csv file, contains one colum with sample names (no header is required)
 * `examples/run.sh` - an example run script that executes the pipeline.
 
 ## Pipeline Arguments

@@ -44,7 +44,7 @@ class ColoredFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-def setup_logging():
+def setup_logging() -> None:
     """
     Setup logging configuration of the script
     """
@@ -91,49 +91,53 @@ def validate_filenames(meta_list: List[Dict[str, Any]]) -> None:
         logging.warning(message)
 
 
-def raise_sample_warning(sample: str, print_samplename: bool):
+def raise_sample_warning(sample: str, warning_messages: List[str]) -> None:
     """
     Checks if there were already any warning for a sample and prints a HEADER if there was none
     sample (str): a sample for which the warnings are raised
     warning_messages (List[str]): a list of warning for particular sample
     """
-    if print_samplename:
+    if warning_messages:
+        # print a header with sample name
         logging.info(f"Sample {sample}:")
+        # raise all warnings
+        for message in warning_messages:
+            logging.warning(message)
 
 
 def validate_consistency(
-    sample: str, meta_list: List[Dict[str, Any]], column: str, print_samplename: bool
-) -> bool:
+    sample: str,
+    meta_list: List[Dict[str, Any]],
+    column: str,
+    warning_messages: List[str],
+) -> None:
     """
     Check if there are multiple values in `column`
     sample (str): sample name
     meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
     column (str): a column of interest in `meta_list`
-    print_samplename: (bool): whether we should print a header with sample name
+    warning_messages: (List[str]): a list of warning messages from previous validation steps
     """
     # get unique values
     unique_values = {meta.get(column, "NaN") for meta in meta_list}
     if len(unique_values) > 1:
-        # print a header
-        raise_sample_warning(sample, print_samplename)
         # make a warning message
         warning_message = (
             f"There are multiple values of {column} available:"
             + ",".join(unique_values)
         )
-        logging.warning(warning_message)
-        print_samplename = False
-    return print_samplename
+        # save a warning message to the list
+        warning_messages.append(warning_message)
 
 
 def validate_readcounts(
-    sample: str, meta_list: List[Dict[str, Any]], print_samplename: bool
-) -> bool:
+    sample: str, meta_list: List[Dict[str, Any]], warning_messages: List[str]
+) -> None:
     """
     Check if there IRODS total_counts equals samtools output
     sample (str): sample name
     meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
-    print_samplename: (bool): whether we should print a header with sample name
+    warning_messages: (List[str]): a list of warning messages from previous validation steps
     """
     # get samples with inconsistent total number of reads
     warning_list = [
@@ -142,26 +146,23 @@ def validate_readcounts(
         if cram_meta["total_reads"] != cram_meta["num_reads_processed"]
     ]
     if warning_list:
-        # print a header
-        raise_sample_warning(sample, print_samplename)
         # make a warning message
         warning_message = (
             "IRODS total_count != num_reads_processed for files:"
             + ",".join(warning_list)
         )
-        logging.warning(warning_message)
-        print_samplename = False
-    return print_samplename
+        # save a warning message to the list
+        warning_messages.append(warning_message)
 
 
 def validate_atac(
-    sample: str, meta_list: List[Dict[str, Any]], print_samplename: bool
-) -> bool:
+    sample: str, meta_list: List[Dict[str, Any]], warning_messages: List[str]
+) -> None:
     """
     Check if there IRODS total_counts equals samtools output
     sample (str): sample name
     meta_list (List[Dict[str, Any]]): a list containing metadata for all files of a particular sample
-    print_samplename: (bool): whether we should print a header with sample name
+    warning_messages: (List[str]): a list of warning messages from previous validation steps
     """
     warning_list = [
         cram_meta["cram_path"]
@@ -169,14 +170,11 @@ def validate_atac(
         if "atac" in cram_meta["library_type"].lower() and cram_meta["i2len"] == "24"
     ]
     if warning_list:
-        # print a header
-        raise_sample_warning(sample, print_samplename)
         # make a warning message
         warning_title = f"The following files are suspected to be 10X ATAC. They were renamed according to CellRanger naming convention :"
         warning_message = warning_title + ",".join(warning_list)
-        logging.warning(warning_message)
-        print_samplename = False
-    return print_samplename
+        # save a warning message to the list
+        warning_messages.append(warning_message)
 
 
 def validate_metalist(meta_list: List[Dict[str, Any]], validate_all: bool) -> None:
@@ -193,26 +191,20 @@ def validate_metalist(meta_list: List[Dict[str, Any]], validate_all: bool) -> No
 
     # validate cram files for each sample
     for sample, indexes in sample_index.items():
-        print_samplename = True
+        warning_messages = list()
         # subsample metadata list
         subsample_metalist = [meta_list[idx] for idx in indexes]
         # validate metadata
-        print_samplename = validate_consistency(
-            sample, subsample_metalist, "library_type", print_samplename
+        validate_consistency(
+            sample, subsample_metalist, "library_type", warning_messages
         )
         if validate_all:
-            print_samplename = validate_readcounts(
-                sample, subsample_metalist, print_samplename
-            )
-            print_samplename = validate_consistency(
-                sample, subsample_metalist, "r1len", print_samplename
-            )
-            print_samplename = validate_consistency(
-                sample, subsample_metalist, "r2len", print_samplename
-            )
-            print_samplename = validate_atac(
-                sample, subsample_metalist, print_samplename
-            )
+            validate_readcounts(sample, subsample_metalist, warning_messages)
+            validate_consistency(sample, subsample_metalist, "r1len", warning_messages)
+            validate_consistency(sample, subsample_metalist, "r2len", warning_messages)
+            validate_atac(sample, subsample_metalist, warning_messages)
+        # raise all warning messages
+        raise_sample_warning(sample, warning_messages)
 
 
 def main() -> None:
@@ -223,7 +215,7 @@ def main() -> None:
     args = PARSER.parse_args()
 
     # read positional argument with filedir path
-    dirpath = args.dir.strip("/")
+    dirpath = args.dir.rstrip("/")
 
     # read all json files to meta_list
     meta_list = list()

@@ -1,336 +1,179 @@
-#!/usr/bin/env nextflow
-
 ///////////////////////////////////////////////////////////////////////////////
 // Get CRAMs from iRODS and convert them to fastq 
 // Logic based on mapcloud CRAM downloader/converter
 // https://github.com/Teichlab/mapcloud/tree/58b1d7163de7b0b2b8880fad19d722b586fc32b9/scripts/10x/utils
-// Author: kp9, bc8, sm42
- ///////////////////////////////////////////////////////////////////////////////
- 
-nextflow.enable.dsl=2
+// Author: kp9, bc8, sm42, ab76, ap41
+///////////////////////////////////////////////////////////////////////////////
+
+include { findCrams } from './modules/metatable.nf'
+include { getMetadata } from './modules/metatable.nf'
+include { parseMetadata } from './modules/metatable.nf'
+include { combineMetadata;  combineMetadata as updateMetadata} from './modules/metatable.nf'
+include { downloadCram } from './modules/getfiles.nf'
+include { cramToFastq } from './modules/getfiles.nf'
+include { calculateReadLength } from './modules/getfiles.nf'
+include { saveMetaToJson } from './modules/getfiles.nf'
+include { checkATAC } from './modules/getfiles.nf'
+include { renameATAC } from './modules/getfiles.nf'
+include { concatFastqs } from './modules/upload2ftp.nf'
+include { uploadFTP } from './modules/upload2ftp.nf'
+include { getSampleName } from './modules/upload2ftp.nf'
+
+
+nextflow.preview.output = true
+
 
 def helpMessage() {
     log.info"""
     =======================
     iRODS to FASTQ pipeline
     =======================
-    This pipeline pulls samples from iRODS and converts them to fastq files.
-    Usage: nextflow run main.nf --meta /path/to/samples.csv
+    This pipeline pulls samples from iRODS along with their metadata and converts them to fastq files.
+    Usage: nextflow run main.nf [OPTIONS]
+        options:
+            --findmeta=path/to/samples.csv       specify a .csv file with sample names to run a metadata search
+            --cram2fastq                         if specified the script runs conversion of cram files that are found on `findmeta` step
+            --meta=path/to/metadata.tsv          this argument spicifies the .tsv with cram files (potentially from `findmeta` step) to run cram2fastq conversion
+            --toftp                              if specified the script uploads the data to ftp server specified in nextflow.config file
+            --fastqfiles                         this argument spicifies the .fastq.gz files (potentially from `cram2fastq` step) to upload them to ftp server
+
+    Examples:
+        1. Run a metadata search for a specified list of samples:
+            nextflow run main.nf --findmeta ./examples/samples.csv
+
+        2. Download cram files (specified in metadata.csv) from IRODS and convert them to fastq
+            nextflow run main.nf --cram2fastq --meta metadata/metadata.tsv
+        
+        3. Upload fastq files to ftp server (you to set up the ftp server in nextflow.config):
+            nextflow run main.nf --toftp --fastqfiles ./results/
+        
+        4. Combine several steps to run them together
+            nextflow run main.nf --findmeta ./examples/samples.csv --cram2fastq --toftp
+        
 
     == samples.csv format ==
-    sample
-    HCA_10687915
-    HCA_10687916
+    UK-CIC10690382
+    UK-CIC10690383
     ========================
     """.stripIndent()
 }
 
-// Prepare a list of the CRAMs for the sample
-// Store the sample ID and the CRAM path in a CSV file for subsequent merging
-process findCrams {
-    label "normal"
-    maxForks 10
-    input:
-        tuple val(sample), val(val2), val(val3), val(samplemeta), val(meta2), val(meta3)
-    output:
-        path("${sample}_${val2}_${val3}.csv")
-    script:
-        """
-        imeta qu -z seq -d ${samplemeta} = "${sample}" and ${meta2} = "${val2}" and ${meta3} = "${val3}" | \
-            grep -v "No rows found" | \
-            sed 's/collection: //g' | \
-            sed 's/dataObj: //g' | \
-            grep -v -- '---' | \
-            paste -d '/' - - | \
-            grep -v "#888.cram" | \
-            grep -v "yhuman" | \
-            sed "s/^/${sample},/" > "${sample}_${val2}_${val3}.csv"
-        """
-}
 
-// Merge the per-sample CRAM lists into a single massive list across all samples
-// We might be publishing this, and ending our run here
-process combineCramLists {
-    label "normal"
-    publishDir "crams", mode: "copy", enabled: "${params.find_crams_only}"
-    input:
-        path(lists, stageAs: "input/*")
-    output:
-        path("crams.csv")
-    script:
-        """
-        cat input/*.csv > crams.csv
-        """
-}
-
-// Download a specified CRAM
-// Perform the md5sum check locally rather than via iget -K
-// There was a time where irods would bug out and not report an error when there was one
-process downloadCram {
-    label "normal4core"
-    maxForks 10
-    input:
-        tuple val(sample), val(irods)
-    output:
-        tuple val(sample), path("*.cram")
-    script:
-        """
-        iget ${irods}
-        FID=`basename ${irods}`
-        MD5LOCAL=`md5sum \$FID | cut -f -1 -d " "`
-        MD5IRODS=`imeta ls -d ${irods} md5 | grep 'value:' | sed 's/value: //'`
-        if [ \$MD5LOCAL != \$MD5IRODS ]
-        then
-            echo "md5sum conflict encountered for \$FID" 1>&2
-            exit 1
-        fi
-        """
-}
-
-// Rename the CRAMs with tidy lane/sample counters for FASTQ generation
-// Treat each RUN_LANE combination as a lane, and the number after that as a sample
-process renameCram {
-    label "normal"
-    input:
-        tuple val(sample), path(crams, stageAs: "input/*")
-    output:
-        tuple val(sample), path("*.cram")
-    script:
-        """
-        lcount=1
-        for LANE in `ls input/*.cram | sed "s|input/||" | cut -f 1 -d "#" | sort | uniq`
-        do
-            scount=1
-            for FID in `ls input/\$LANE*.cram`
-            do
-                ln -s \$FID \$lcount#\$scount.cram
-                (( scount++ ))
-            done
-            (( lcount++ ))
-        done
-        """
-}
-
-// Convert CRAM to FASTQ, using the numbering in the names for tidy S and L numbering
-// Possibly publish, depending on what the input parameter says
-// Accept I1/I2/R1/R2 output names in order as ATAC wants them named I1/R2/R1/R3 instead
-// As a reminder, Nextflow variables are called as ${}
-// Meanwhile bash variables are called as \$
-// There's no need to escape underscores after Nextflow variables
-// Meanwhile underscores after bash variables need to be escaped via \\_
-// (A single \_ won't work here)
-// The versions of stuff I have on the farm generate gibberish in I2 for single-index
-// As such, need to check whether the CRAM is single index if the formula is unset
-// Indices live in the BC tag, and a dual index is signalled by the presence of "-"
-// Remove any empty (index) files at the end, let's assume no more than 50 bytes big
-process cramToFastq {
-    label "normal4core"
-    container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
-    publishDir "${params.publish_dir}", mode: "copy", overwrite: true, enabled: "${ params.publish_fastqs && !params.merge }"
-    input:
-        tuple val(sample), path(cram), val(i1), val(i2), val(r1), val(r2)
-    output:
-        tuple val(sample), path("*.fastq.gz")
-    script:
-        """
-        export REF_PATH=${params.REF_PATH}
-        scount=`basename ${cram} .cram | cut -f 2 -d "#"`
-        lcount=`basename ${cram} .cram | cut -f 1 -d "#"`
-        ISTRING="${params.index_format}"
-        if [[ \$ISTRING == "i*i*" ]]
-        then
-            if [[ `samtools view ${cram} | grep "BC:" | head -n 1 | sed "s/.*BC:Z://" | sed "s/\\t.*//" | tr -dc "-" | wc -c` == 0 ]]
-            then
-                ISTRING="i*"
-            fi
-        fi
-        if [[ `samtools view -H ${cram} | grep '@SQ' | wc -l` == 0 ]]
-        then
-            samtools fastq -@ ${task.cpus} -1 ${sample}_S\$scount\\_L00\$lcount\\_${r1}_001.fastq.gz -2 ${sample}_S\$scount\\_L00\$lcount\\_${r2}_001.fastq.gz --i1 ${sample}_S\$scount\\_L00\$lcount\\_${i1}_001.fastq.gz --i2 ${sample}_S\$scount\\_L00\$lcount\\_${i2}_001.fastq.gz --index-format \$ISTRING -n ${cram}
-        else
-            samtools view -b ${cram} | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -1 ${sample}_S\$scount\\_L00\$lcount\\_${r1}_001.fastq.gz -2 ${sample}_S\$scount\\_L00\$lcount\\_${r2}_001.fastq.gz --i1 ${sample}_S\$scount\\_L00\$lcount\\_${i1}_001.fastq.gz --i2 ${sample}_S\$scount\\_L00\$lcount\\_${i2}_001.fastq.gz --index-format \$ISTRING -n -
-        fi
-        find . -type f -name "*.fastq.gz" -size -50c -exec rm {} \\;
-        """
-}
-
-process concatFastqs {
-    label "normal"
-    publishDir "${params.publish_dir}", mode: 'copy', overwrite: true, saveAs: { f -> file(f).getFileName().toString() }
-    input:
-        tuple val(sample), path(fastqs)
-    output:
-        path("merged/*.fastq.gz")
-    script:
-        """
-        mkdir -p merged
-        # create list of files per read R1/R2 and index I1
-        list_r1=\$(echo ${sample}*_S*_L*_R1_*.fastq.gz)
-        list_r2=\$(echo ${sample}*_S*_L*_R2_*.fastq.gz)
-        list_i1=\$(echo ${sample}*_S*_L*_I1_*.fastq.gz)
-
-        # because not all samples will have R3 or I2 use shopt nullglob
-        # to allow * expansion and not fail when it doesn't match anything
-	    list_r3=\$(shopt -s nullglob; echo ${sample}*_S*_L*_R3_*.fastq.gz)
-        list_i2=\$(shopt -s nullglob; echo ${sample}*_S*_L*_I2_*.fastq.gz)
-        
-		# R1 and R2 for all modalities
-        echo "  ...Concatenating \$list_r1 >> ${sample}_S1_L001_R1_001.fastq.gz"
-        cat \$list_r1 > merged/${sample}_S1_L001_R1_001.fastq.gz
-        echo "  ...Concatenating \$list_r2 >> ${sample}_S1_L001_R2_001.fastq.gz"
-        cat \$list_r2 > merged/${sample}_S1_L001_R2_001.fastq.gz
-        
-        # ATAC has R3 if present concatenate too
-        if [[ ! -z "\$list_r3" ]]; then
-            echo "  ...Concatenating \$list_r3 >> ${sample}_S1_L001_R3_001.fastq.gz"
-            cat \$list_r3 > merged/${sample}_S1_L001_R3_001.fastq.gz
-        fi
-
-        # I1 for all modalities
-        echo "  ...Concatenating \$list_i1 >> ${sample}_S1_L001_I1_001.fastq.gz"
-        cat \$list_i1 > merged/${sample}_S1_L001_I1_001.fastq.gz
-        
-        ## we actually just ignore I2
-        ## check if list_i2 has any matches
-        ##if [[ ! -z "\$list_i2" ]]; then
-        ##    echo "  ...Concatenating \$list_i2 >> ${sample}_S1_L001_I2_001.fastq.gz"
-        ##    cat \$list_i2 > merged/${sample}_S1_L001_I2_001.fastq.gz
-        ##fi
-        """
-}
-
-process uploadFTP {
-    label "normal"
-    input:
-        path(fastqs)
-    output:
-        path("done")
-    script:
-        """
-        lftp -u ${params.ftp_credentials} ${params.ftp_host} -e "set ftp:ssl-allow no; cd ${params.ftp_path}; mput ${fastqs}; bye"
-        >done
-        """
-}
-
-// Helper workflow that creates a master CRAM list based on the metadata file
-workflow findcrams {
+workflow findmeta {
+    take:
+        samples
     main:
-        // We need some sort of sample information to download
-        if (params.meta == null) {
-            error "Please provide a metadata file via --meta"
-        }
-        // Get the header line of the CSV
-        // If fewer than three entries are present, buffer with "default" iRODS filler
-        // i.e. target = 1 and type = cram
-        // Accomplish this by appending the extras at the end and then subsetting to 3
-        fields = Channel
-            .fromPath(params.meta, checkIfExists: true)
-            .splitCsv()
-            .first()
-            .combine(Channel.of("target"))
-            .combine(Channel.of("type"))
-            .map({it -> [it[0], it[1], it[2]]})
-        // Load contents of CSV
-        // Repeat same general idea of buffering with "default" iRODS filler
-        // And then slice down to three entries per line
-        // And then create six entries per line by adding in the header information
-        metadata = Channel
-            .fromPath(params.meta, checkIfExists: true)
-            .splitCsv(skip:1)
-            .combine(Channel.of("1"))
-            .combine(Channel.of("cram"))
-            .map({it -> [it[0], it[1], it[2]]})
-            .combine(fields)
-        // Perform the designated iRODS queries, getting a CSV out of each
-        // With the CSV lines being sample,irods_path_to_cram
-        // Put all the CSVs together...
-        foundCrams = findCrams(metadata).collect()
-        // ...and turn them into a mega-CSV with all the files to download
-        cramList = combineCramLists(foundCrams)
+        // find all cram files for all samples
+        cram_path = findCrams(samples).splitCsv()
+
+        // get metadata for samples
+        meta_files = getMetadata(cram_path).groupTuple()
+
+        // parse data
+        parsed_meta = parseMetadata(meta_files).flatten()
+
+        // write metadata to csv file
+       combineMetadata(parsed_meta.collect())
     emit:
-        cramList = cramList
+        combineMetadata.out.metadata
 }
 
-// Specify a workflow name and what it emits and everything
-// As this way its .out.fastqs can be used by other Nextflow stuff that imports it
-workflow irods {
+
+workflow downloadcrams {
+    take:
+        cram_metadata
     main:
-        // Do we need to find the CRAMs? If no CRAM list is passed then yes
-        if (params.cram_list == null) {
-            findcrams()
-            cramList = findcrams.out.cramList
-        } else {
-            // We got given a CRAM list, load it
-            cramList = Channel.fromPath(params.cram_list, checkIfExists: true)
-        }        
-        // Handily Nextflow channels that point to a file can have their contents read
-        cramPaths = cramList.splitCsv()
-        // Can now download the CRAMs
-        // They're named somewhat chaotically, so rename them in an orderly fashion
-        // So that the sample and lane counts (in case Cellranger becomes involved)
-        // Increment nicely and tidily; more details as a comment before renameCram()
-        // .groupTuple() to see all the CRAMs for a given sample at once
-        crams = downloadCram(cramPaths).groupTuple()
-        // .transpose() to effectively undo the groupTuple(), get one line per CRAM
-        // Though with sample info still present in each line
-        renamedCrams = renameCram(crams).transpose()
-        // ATAC is kinda special and wants its reads named differently
-        // The process expects samtools fastq output names in I1/I2/R1/R2 order
-        if (params.type == "ATAC") {
-            renamedCrams = renamedCrams
-                .combine(Channel.of("I1"))
-                .combine(Channel.of("R2"))
-                .combine(Channel.of("R1"))
-                .combine(Channel.of("R3"))
+        // download cram files
+        crams = downloadCram(cram_metadata)
+        // crams.cram_file.view()
+        
+        // convert cram files to fastq
+        fastq_files = cramToFastq(crams)
+                                .map { fastqfiles, meta, num_reads_processed -> [fastqfiles, meta + ['num_reads_processed': num_reads_processed]] }
+
+        // calculate read length
+        length = calculateReadLength(fastq_files)
+                                .map { fastqfiles, meta, r1len, r2len, i1len, i2len -> [fastqfiles, meta + ['r1len': r1len, 'r2len': r2len, 'i1len': i1len, 'i2len': i2len]] }
+
+        // rename 10X ATAC files if there are such
+        length.branch {
+            fastq, meta ->
+            atac: checkATAC(meta['library_type'], meta['i2len'], meta['fastq_prefix'])
+            other: true
         }
-        else {
-            renamedCrams = renamedCrams
-                .combine(Channel.of("I1"))
-                .combine(Channel.of("I2"))
-                .combine(Channel.of("R1"))
-                .combine(Channel.of("R2"))
-        }
-        // Perform the conversion
-        // Afterward group up the FASTQ lists by sample
-        // And turn the FASTQ list of lists into a single list
-        fastqs = cramToFastq(renamedCrams)
-            .groupTuple()
-            .map({it -> [it[0], it[1].flatten()]})
+        .set { fastq_ch }
+
+        renameATAC(fastq_ch.atac)
+
+        combined_fastq = fastq_ch.other.concat(renameATAC.out)
+        
+        // save metadata to json file
+        json_ch = saveMetaToJson(combined_fastq).collect()
+
+        // update metadata file
+        metadata = updateMetadata(json_ch)
     emit:
-        fastqs = fastqs
+        combined_fastq
+    publish:
+        combined_fastq >> '.'
+        metadata >> 'metadata'
+        
 }
 
+workflow uploadtoftp {
+    take:
+        fastq_ch
+    main:
+        // merge fastq files together for each sample
+        merged_fastq = concatFastqs(fastq_ch)
+        
+        // upload files to ftp server
+        uploadFTP(merged_fastq)
+    publish:
+        merged_fastq >> 'merged'
+}
 
-// Do this so the script actually runs
-// The equivalent of python's main() thing, I guess
 workflow {
+    // Validate input options
     if (params.help) {
         helpMessage()
-        exit 1
+        System.exit(0)
+    } else if (params.findmeta == null && params.cram2fastq == false && params.toftp == false) {
+        helpMessage()
+        error "Please use one of the methods listed above"
+    // Run findmeta workflow
+    } else if (params.findmeta != null) {
+        // read sample names from file
+        samples = Channel.fromPath(params.findmeta, checkIfExists: true).splitCsv().flatten()
+        // find cram metadata
+        findmeta(samples)
+        cram_metadata = findmeta.out.splitCsv( header: true , sep: '\t')
+    // Load metadata from file if specified
+    } else if (params.meta != null) {
+        // load existing metadata file
+        cram_metadata = Channel.fromPath(params.meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
+    } 
+    
+    // Run downloadcrams workflow
+    if (params.cram2fastq) {
+        downloadcrams(cram_metadata)
+        fastq_ch = downloadcrams.out.map {fastq_path, meta -> [meta['sample'], fastq_path]}
+                                    .transpose()
+                                    .groupTuple()
+    // Get fastq files from input
+    } else if (params.fastqfiles != null) {
+        fastq_ch = Channel.fromPath("${params.fastqfiles}/*.fastq.gz")
+                      .map {fastq_path ->  [getSampleName(fastq_path), fastq_path]}
+                      .groupTuple()
     }
-    // Do we just return the CRAM list?
-    if (params.find_crams_only == false) {
-        // This needs to be a proper start to end workflow so fastqs can be emitted
-        irods()
-    } else {
-        // This will find the CRAMs and publish the list
-        findcrams()
-    }
-    // Do we want merge multiple sample number and lanes of a sample into one file?
-    if (params.merge == true){
-        fastqs = concatFastqs(irods.out)
-
-        // Do we need yp upload file to an FTP?
-        if (params.ftp_upload == true){
-            arrayexpress(fastqs)
-        }
+    // Run uploadtoftp workflow
+    if (params.toftp) {
+        uploadtoftp(fastq_ch)
     }
 }
 
-
-workflow.onComplete = {
-  log.info "Workflow completed at: ${workflow.complete}"
-  log.info "Time taken: ${workflow.duration}"
-  log.info "Execution status: ${workflow.success ? 'success' : 'failed'}"
+output {
+    directory "${params.publish_dir}"
+    mode 'copy'
+    overwrite true
 }
-

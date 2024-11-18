@@ -1,68 +1,50 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
 import json
 import csv
-from typing import Set, List, Dict, Any
-from collections import defaultdict
 import logging
 import argparse
+from colored_logger import setup_logging
+from collections import defaultdict
+from typing import Set, List, Dict, Any
 
 
-PARSER = argparse.ArgumentParser(
-    description="Reads metadata from a set of .json files and combines everything to a .tsv file"
-)
-PARSER.add_argument(
-    "dir",
-    metavar="dir",
-    type=str,
-    help="specify a path to the directory with a set of .json files you want to combine",
-)
-PARSER.add_argument(
-    "-a",
-    "--validate_all",
-    help="if specified runs all validation steps, if not runs library type validation only",
-    action="store_true",
-)
-
-
-class ColoredFormatter(logging.Formatter):
-    blue = "\n\033[94m"
-    yellow = "\033[93m"
-    reset = "\033[0m"
-    format = "%(levelname)s: %(message)s"
-
-    FORMATS = {
-        logging.INFO: blue + format + reset,
-        logging.WARNING: yellow + format + reset,
-    }
-
-    def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt)
-        return formatter.format(record)
-
-
-def setup_logging() -> None:
+def init_parser() -> argparse.ArgumentParser:
     """
-    Setup logging configuration of the script
+    Initialise argument parser for the script
     """
-    # a basic config to save logs to metadata.log
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s: %(message)s",
-        filename="metadata.log",
-        filemode="w",
+    parser = argparse.ArgumentParser(
+        description="Reads metadata from a set of .json files and combines everything to a .tsv file"
     )
-
-    # define a Handler which writes INFO messages or higher to the sys.stderr
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(logging.INFO)
-    # tell the handler to use colored format
-    console.setFormatter(ColoredFormatter())
-    # add the handler to the root logger
-    logging.getLogger("").addHandler(console)
+    parser.add_argument(
+        "dir",
+        metavar="dir",
+        type=str,
+        help="specify a path to the directory with a set of .json files you want to combine",
+    )
+    parser.add_argument(
+        "-a",
+        "--validate_all",
+        help="if specified runs all validation steps, if not runs library type validation only",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--logfile",
+        metavar="<file>",
+        type=str,
+        help="Specify a log file name",
+        default="getmetadata.log",
+    )
+    parser.add_argument(
+        "--filename",
+        metavar="<file>",
+        type=str,
+        help="Specify a name for metadata file",
+        default="metadata.tsv",
+    )
+    return parser
 
 
 def get_sampleindex(meta_list: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -208,11 +190,12 @@ def validate_metalist(meta_list: List[Dict[str, Any]], validate_all: bool) -> No
 
 
 def main() -> None:
-    # set up logging
-    setup_logging()
+    # parse script arguments
+    parser = init_parser()
+    args = parser.parse_args()
 
-    # parse arguments
-    args = PARSER.parse_args()
+    # set up logger
+    setup_logging(args.logfile)
 
     # read positional argument with filedir path
     dirpath = args.dir.rstrip("/")
@@ -224,6 +207,10 @@ def main() -> None:
         with open(f"{dirpath}/{filename}", "r") as file:
             # reading the json file
             sample_meta = json.load(file)
+            # drop md5 column if it is final metadata
+            if args.validate_all:
+                del sample_meta["md5"]
+            # save to list
             meta_list.append(sample_meta)
 
     # save the field names
@@ -236,7 +223,7 @@ def main() -> None:
     validate_metalist(meta_list, args.validate_all)
 
     # write all metadata to csv
-    with open("metadata.tsv", mode="w") as csv_file:
+    with open(args.filename, mode="w") as csv_file:
         # create writer object
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames, delimiter="\t")
 

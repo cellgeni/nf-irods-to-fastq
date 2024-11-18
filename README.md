@@ -23,22 +23,43 @@ This Nextflow pipeline pulls samples from iRODS and converts them to FASTQ files
 *   `--fastqfiles`: this argument spicifies the .fastq.gz files (potentially from `cram2fastq` step) to upload them to the ArrayExpress ftp server
 
 ## Examples of use
+### Prepare your environment
+To run this pipeline you need to have enabled:
+- IRODS
+- Python
+- Nextflow of version `24.10.0` or higher
+- Singularity
+
+You can enable them on `farm22` with the following commands:
+```shell
+module load cellgen/nextflow/24.10.0
+module load cellgen/irods
+module load cellgen/singularity
+module load python-3.11.6
+```
+
+Additionally you need to set your LSF group:
+```shell
+export LSB_DEFAULT_USERGROUP=<YOURGROUP>
+```
+
+### Run nextflow command
 1. Run a metadata search for a specified list of samples:
 ```shell
 nextflow run main.nf --findmeta ./examples/samples.csv
 ```
 
-2. Download cram files (specified in metadata.tsv) from IRODS and convert them to fastq
+1. Download cram files (specified in metadata.tsv) from IRODS and convert them to fastq
 ```shell
 nextflow run main.nf --cram2fastq --meta metadata/metadata.tsv
 ```
 
-3. Upload fastq files to ftp server (you to set up the ftp server in nextflow.config):
+1. Upload fastq files to ftp server (you to set up the ftp server in nextflow.config):
 ```shell
 nextflow run main.nf --toftp --fastqfiles ./results/
 ```
 
-4. Combine several steps to run them together
+1. Combine several steps to run them together
 ```shell
 nextflow run main.nf --findmeta ./examples/samples.csv --cram2fastq --toftp
 ```

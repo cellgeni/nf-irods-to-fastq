@@ -20,10 +20,6 @@ def checkATAC(library_type, i2len, fastq_prefix) {
 // Perform the md5sum check locally rather than via iget -K
 // There was a time where irods would bug out and not report an error when there was one
 process downloadCram {
-    label "normal"
-    tag "Loading ${meta['cram_path']}"
-    errorStrategy {task.exitStatus == 1 ? downloadCramError(sample) : 'terminate'}
-    maxForks 10
     input:
         val meta
     output:
@@ -54,9 +50,6 @@ process downloadCram {
 // Indices live in the BC tag, and a dual index is signalled by the presence of "-"
 // Remove any empty (index) files at the end, let's assume no more than 50 bytes big
 process cramToFastq {
-    label "normal"
-    tag "Converting cram to fastq: ${meta['cram_path']}"
-    container = '/nfs/cellgeni/singularity/images/samtools_v1.18-biobambam2_v2.0.183.sif'
     input:
         tuple path(cram_file), val(meta)
     output:
@@ -87,8 +80,6 @@ process cramToFastq {
 // Regular expression in sed command matches a read type for fastq name of format
 // [Sample Name]_S[Sample Number]_L00[Lane number]_[Read type]_001.fastq.gz
 process calculateReadLength {
-    label "normal"
-    tag "Calculating read-length for: ${meta['cram_path']}"
     input:
         tuple path("*"), val(meta)
     output:
@@ -121,8 +112,6 @@ process renameATAC{
 
 // Save all metadata to Json File
 process saveMetaToJson {
-    label "local"
-    tag "Saving metadata for: ${meta['cram_path']}"
     input:
         tuple path(fastq, stageAs: "*.fastq.gz"), val(meta)
     output:

@@ -21,6 +21,7 @@ include { getSampleName } from './modules/upload2ftp.nf'
 
 
 nextflow.preview.output = true
+nextflow.enable.dsl=2
 
 
 def helpMessage() {
@@ -59,7 +60,7 @@ def helpMessage() {
 }
 
 
-workflow findmeta {
+workflow FINDMETA {
     take:
         samples
     main:
@@ -79,7 +80,7 @@ workflow findmeta {
 }
 
 
-workflow downloadcrams {
+workflow DOWNLOADCRAMS {
     take:
         cram_metadata
     main:
@@ -116,11 +117,10 @@ workflow downloadcrams {
         combined_fastq
     publish:
         combined_fastq >> '.'
-        metadata >> 'metadata'
         
 }
 
-workflow uploadtoftp {
+workflow UPLOADTOFTP {
     take:
         fastq_ch
     main:
@@ -129,8 +129,6 @@ workflow uploadtoftp {
         
         // upload files to ftp server
         uploadFTP(merged_fastq)
-    publish:
-        merged_fastq >> 'merged'
 }
 
 workflow {
@@ -146,8 +144,8 @@ workflow {
         // read sample names from file
         samples = Channel.fromPath(params.findmeta, checkIfExists: true).splitCsv().flatten()
         // find cram metadata
-        findmeta(samples)
-        cram_metadata = findmeta.out.splitCsv( header: true , sep: '\t')
+        FINDMETA(samples)
+        cram_metadata = FINDMETA.out.splitCsv( header: true , sep: '\t')
     // Load metadata from file if specified
     } else if (params.meta != null) {
         // load existing metadata file
@@ -156,8 +154,8 @@ workflow {
     
     // Run downloadcrams workflow
     if (params.cram2fastq) {
-        downloadcrams(cram_metadata)
-        fastq_ch = downloadcrams.out.map {fastq_path, meta -> [meta['sample'], fastq_path]}
+        DOWNLOADCRAMS(cram_metadata)
+        fastq_ch = DOWNLOADCRAMS.out.map {fastq_path, meta -> [meta['sample'], fastq_path]}
                                     .transpose()
                                     .groupTuple()
     // Get fastq files from input
@@ -168,12 +166,6 @@ workflow {
     }
     // Run uploadtoftp workflow
     if (params.toftp) {
-        uploadtoftp(fastq_ch)
+        UPLOADTOFTP(fastq_ch)
     }
-}
-
-output {
-    directory "${params.publish_dir}"
-    mode 'copy'
-    overwrite true
 }

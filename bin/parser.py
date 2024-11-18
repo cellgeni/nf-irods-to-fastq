@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -83,7 +83,7 @@ def main() -> None:
     # parse data for files in <dirpath>
     metadata_list = list()
     for filename in os.listdir(dirpath):
-        filepath = os.path.join(dirpath,filename)
+        filepath = os.path.join(dirpath, filename)
         metadata_list.append(parse_txt(filepath))
 
     # make unique fastq names

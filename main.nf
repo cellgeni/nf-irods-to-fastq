@@ -5,6 +5,11 @@
 // Author: kp9, bc8, sm42, ab76, ap41
 ///////////////////////////////////////////////////////////////////////////////
 
+///////////////////////NEXTFLOW FEATURES///////////////////////////////////////
+nextflow.enable.dsl=2
+nextflow.preview.output=true
+
+/////////////////////// IMPORTS AND FUNCTIONS///////////////////////////////////////////////
 include { findCrams } from './modules/metatable.nf'
 include { getMetadata } from './modules/metatable.nf'
 include { parseMetadata } from './modules/metatable.nf'
@@ -18,9 +23,6 @@ include { renameATAC } from './modules/getfiles.nf'
 include { concatFastqs } from './modules/upload2ftp.nf'
 include { uploadFTP } from './modules/upload2ftp.nf'
 include { getSampleName } from './modules/upload2ftp.nf'
-
-
-nextflow.preview.output = true
 
 
 def helpMessage() {
@@ -58,8 +60,8 @@ def helpMessage() {
     """.stripIndent()
 }
 
-
-workflow findmeta {
+/////////////////////// SUBWORKLFOWS ///////////////////////////////////////////////
+workflow FINDMETA {
     take:
         samples
     main:
@@ -79,7 +81,7 @@ workflow findmeta {
 }
 
 
-workflow downloadcrams {
+workflow DOWNLOADCRAMS {
     take:
         cram_metadata
     main:
@@ -115,12 +117,12 @@ workflow downloadcrams {
     emit:
         combined_fastq
     publish:
-        combined_fastq >> '.'
-        metadata >> 'metadata'
+        combined_fastq >> "."
+
         
 }
 
-workflow uploadtoftp {
+workflow UPLOADTOFTP {
     take:
         fastq_ch
     main:
@@ -129,10 +131,10 @@ workflow uploadtoftp {
         
         // upload files to ftp server
         uploadFTP(merged_fastq)
-    publish:
-        merged_fastq >> 'merged'
 }
 
+
+/////////////////////// MAIN WORKFLOW ///////////////////////////////////////////////
 workflow {
     // Validate input options
     if (params.help) {
@@ -146,8 +148,8 @@ workflow {
         // read sample names from file
         samples = Channel.fromPath(params.findmeta, checkIfExists: true).splitCsv().flatten()
         // find cram metadata
-        findmeta(samples)
-        cram_metadata = findmeta.out.splitCsv( header: true , sep: '\t')
+        FINDMETA(samples)
+        cram_metadata = FINDMETA.out.splitCsv( header: true , sep: '\t')
     // Load metadata from file if specified
     } else if (params.meta != null) {
         // load existing metadata file
@@ -156,8 +158,8 @@ workflow {
     
     // Run downloadcrams workflow
     if (params.cram2fastq) {
-        downloadcrams(cram_metadata)
-        fastq_ch = downloadcrams.out.map {fastq_path, meta -> [meta['sample'], fastq_path]}
+        DOWNLOADCRAMS(cram_metadata)
+        fastq_ch = DOWNLOADCRAMS.out.map {fastq_path, meta -> [meta['sample'], fastq_path]}
                                     .transpose()
                                     .groupTuple()
     // Get fastq files from input
@@ -168,12 +170,13 @@ workflow {
     }
     // Run uploadtoftp workflow
     if (params.toftp) {
-        uploadtoftp(fastq_ch)
+        UPLOADTOFTP(fastq_ch)
     }
 }
 
 output {
-    directory "${params.publish_dir}"
-    mode 'copy'
-    overwrite true
+    '.' {
+        mode params.publish_mode
+        overwrite true
+    }
 }

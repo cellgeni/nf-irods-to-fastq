@@ -7,10 +7,6 @@ def findCramsError(sample) {
 // Prepare a list of the CRAMs for the sample
 // Store the sample ID and the CRAM path in a CSV file for subsequent merging
 process findCrams {
-    label "local"
-    tag "Searching files for sample $sample"
-    errorStrategy {task.exitStatus == 1 ? findCramsError(sample) : 'terminate'}
-    maxForks 10
     input:
         val(sample)
     output:
@@ -31,8 +27,6 @@ process findCrams {
 
 // Get the metadata for each sample
 process getMetadata {
-    label "local"
-    tag "Getting metadata for $cram_path"
     input:
         tuple val(sample), val(cram_path)
     output:
@@ -45,9 +39,6 @@ process getMetadata {
 
 // Parse metadata for each sample
 process parseMetadata {
-    debug true
-    label "local"
-    tag "Parsing metadata for $sample"
     input:
         tuple val(sample), path("input/*.txt")
     output:
@@ -64,23 +55,19 @@ process parseMetadata {
 // [ indicates the start of a control sequence, and [0-9;]* captures numbers separated
 // by semicolons. m is the final character of the sequence that applies the style.
 process combineMetadata {
-    debug true
-    label "local"
-    tag "Combining the metadata for all files to metadata.csv"
-    publishDir "metadata", mode: "copy", overwrite: true
     input:
         path('input/*.json')
     output:
-        path("metadata.tsv"), emit: metadata
-        path('metadata.log'), emit: log
+        path("*.tsv"), emit: metadata
+        path('*.log'), emit: log
     script:
-        if (task.process == 'findmeta:combineMetadata') {
+        if (task.process == 'FINDMETA:combineMetadata') {
             """
             combine_meta.py ./input/
             """
-        } else if (task.process == 'downloadcrams:updateMetadata'){
+        } else if (task.process == 'DOWNLOADCRAMS:updateMetadata'){
             """
-            combine_meta.py --validate_all ./input/
+            combine_meta.py --validate_all --logfile loadcrams.log --filename metadata_final.tsv ./input/
             """
         } else {
             error "Invalid process name: $task.process"

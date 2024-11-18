@@ -5,6 +5,11 @@
 // Author: kp9, bc8, sm42, ab76, ap41
 ///////////////////////////////////////////////////////////////////////////////
 
+///////////////////////NEXTFLOW FEATURES///////////////////////////////////////
+nextflow.enable.dsl=2
+nextflow.preview.output=true
+
+/////////////////////// IMPORTS AND FUNCTIONS///////////////////////////////////////////////
 include { findCrams } from './modules/metatable.nf'
 include { getMetadata } from './modules/metatable.nf'
 include { parseMetadata } from './modules/metatable.nf'
@@ -18,10 +23,6 @@ include { renameATAC } from './modules/getfiles.nf'
 include { concatFastqs } from './modules/upload2ftp.nf'
 include { uploadFTP } from './modules/upload2ftp.nf'
 include { getSampleName } from './modules/upload2ftp.nf'
-
-
-nextflow.preview.output = true
-nextflow.enable.dsl=2
 
 
 def helpMessage() {
@@ -59,7 +60,7 @@ def helpMessage() {
     """.stripIndent()
 }
 
-
+/////////////////////// SUBWORKLFOWS ///////////////////////////////////////////////
 workflow FINDMETA {
     take:
         samples
@@ -116,7 +117,8 @@ workflow DOWNLOADCRAMS {
     emit:
         combined_fastq
     publish:
-        combined_fastq >> '.'
+        combined_fastq >> "."
+
         
 }
 
@@ -131,6 +133,8 @@ workflow UPLOADTOFTP {
         uploadFTP(merged_fastq)
 }
 
+
+/////////////////////// MAIN WORKFLOW ///////////////////////////////////////////////
 workflow {
     // Validate input options
     if (params.help) {
@@ -167,5 +171,12 @@ workflow {
     // Run uploadtoftp workflow
     if (params.toftp) {
         UPLOADTOFTP(fastq_ch)
+    }
+}
+
+output {
+    '.' {
+        mode params.publish_mode
+        overwrite true
     }
 }

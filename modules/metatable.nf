@@ -58,8 +58,8 @@ process combineMetadata {
     input:
         path('input/*.json')
     output:
-        path("metadata.tsv"), emit: metadata
-        path('metadata.log'), emit: log
+        path("*.tsv"), emit: metadata
+        path('*.log'), emit: log
     script:
         if (task.process == 'FINDMETA:combineMetadata') {
             """
@@ -67,7 +67,7 @@ process combineMetadata {
             """
         } else if (task.process == 'DOWNLOADCRAMS:updateMetadata'){
             """
-            combine_meta.py --validate_all ./input/
+            combine_meta.py --validate_all --logfile loadcrams.log --filename metadata_final.tsv ./input/
             """
         } else {
             error "Invalid process name: $task.process"

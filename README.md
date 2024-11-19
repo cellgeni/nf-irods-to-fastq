@@ -2,6 +2,7 @@
 This Nextflow pipeline pulls samples from iRODS and converts them to FASTQ files.
 
 ## Contents of Repo
+
 * `main.nf` - the Nextflow pipeline that runs all workflows
 * `modules/metatable.nf` - a collection of processes that help getting `IRODS` metadata for samples listed in `--findmeta <samples.csv>` file
 * `modules/getfiles.nf` - a collection of processes that help loading the data (`.cram` or `.bam` files) from IRODS and converting them to `.fastq.gz` files
@@ -9,6 +10,7 @@ This Nextflow pipeline pulls samples from iRODS and converts them to FASTQ files
 * `nextflow.config` - the configuration script that controls the cluster scheduler, process and container
 * `bin/parser.py` - script that parses metadata from `imeta ls` output and saves it in `.json` format
 * `bin/combine_meta.py` - script that combines all metadata in `.json` format and saves it to `.tsv` file
+* `bin/colored_logger.py` - script sets up the logger with colored output
 * `examples/samples.csv` - an example samples.csv file, contains one colum with sample names (no header is required)
 * `examples/run.sh` - an example run script that executes the pipeline.
 
@@ -44,22 +46,39 @@ export LSB_DEFAULT_USERGROUP=<YOURGROUP>
 ```
 
 ### Run nextflow command
-1. Run a metadata search for a specified list of samples:
+**1.** Run a metadata search for a specified list of samples:
 ```shell
 nextflow run main.nf --findmeta ./examples/samples.csv
 ```
 
-1. Download cram files (specified in metadata.tsv) from IRODS and convert them to fastq
+This will generate `metadata` directory with the following files:
+```shell
+metadata/
+├── getmetadata.log # contains warnings if there is some inconsistency in files
+└── metadata.tsv # contains main metadata for each sample available on IRODS
+```
+**2.** Download cram files (that are specified in `metadata.tsv`) from IRODS and convert them to fastq
 ```shell
 nextflow run main.nf --cram2fastq --meta metadata/metadata.tsv
 ```
-
-1. Upload fastq files to ftp server (you to set up the ftp server in nextflow.config):
+This will generate `results` dir with `.fastq.gz` files and `metadata_final.tsv` and `loadcrams.log` files:
+```shell
+├── modules
+│   ├── getfiles.nf
+│   ├── metatable.nf
+│   ├── module.config
+│   └── upload2ftp.nf
+├── results
+│   ├── GBM_RNA13078582_S3_L005_I1_001.fastq.gz
+│   ├── ...
+│   └── UK-CIC10690382_S1_L006_R2_001.fastq.gz
+```
+**3.** Upload fastq files to ftp server (you to set up the ftp server in nextflow.config):
 ```shell
 nextflow run main.nf --toftp --fastqfiles ./results/
 ```
 
-1. Combine several steps to run them together
+**4.** Combine several steps to run them together
 ```shell
 nextflow run main.nf --findmeta ./examples/samples.csv --cram2fastq --toftp
 ```

@@ -27,7 +27,7 @@ This Nextflow pipeline pulls samples from iRODS and converts them to FASTQ files
 ## Examples of use
 ### Prepare your environment
 To run this pipeline you need to have enabled:
-- IRODS
+- IRODS (do not forget to run `iinit`)
 - Python
 - Nextflow of version `24.10.0` or higher
 - Singularity

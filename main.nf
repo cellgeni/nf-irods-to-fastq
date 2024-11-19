@@ -174,9 +174,9 @@ workflow {
     }
 }
 
+/////////////////////// WORKFLOW OUTPUT DEFINITION ///////////////////////////////////////////////
+// It look stupid (and it is really stupid), but it is the way it work in current nextflow versions
+
 output {
-    '.' {
-        mode params.publish_mode
-        overwrite true
-    }
+
 }

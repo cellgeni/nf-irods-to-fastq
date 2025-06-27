@@ -5,7 +5,7 @@ include { combineMetadata} from '../../../modules/metatable.nf'
 
 
 
-workflow FINDMETA {
+workflow FINDIRODSCRAMS {
     take:
         samples
     main:

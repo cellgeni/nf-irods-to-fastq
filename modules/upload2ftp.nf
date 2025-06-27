@@ -1,13 +1,3 @@
-// Get a Sample name from fastq path if fastq_path is in format
-// path/to/dir/[Sample Name]_S[Sample Number]_L00[Lane number]_[Read type]_001.fastq.gz
-// .*\/(.*?)_: Matches the part of the string after the last / but before _.
-// _S.+_L\d{3}: Matches _S followed by the sample number and _L00 followed by three digits (representing the lane number)
-// [RI]\d_001\.fastq\.gz: Matches the "Read Type" (R1, R2, I1, I2) and the rest of the file extension.
-def getSampleName(fastq_path) {
-    def match = fastq_path =~ /.*\/(.*?)_S.+_L\d{3}_[RI]\d_001\.fastq\.gz/
-    return match[0][1]
-}
-
 // Concat fastq files before publishing them
 process concatFastqs {
     input:

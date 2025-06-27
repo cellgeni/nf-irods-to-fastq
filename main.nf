@@ -7,15 +7,9 @@
 
 
 /////////////////////// IMPORTS AND FUNCTIONS///////////////////////////////////////////////
-include { downloadCram } from './modules/getfiles.nf'
-include { cramToFastq } from './modules/getfiles.nf'
-include { calculateReadLength } from './modules/getfiles.nf'
-include { saveMetaToJson } from './modules/getfiles.nf'
-include { checkATAC } from './modules/getfiles.nf'
-include { renameATAC } from './modules/getfiles.nf'
-include { concatFastqs } from './modules/upload2ftp.nf'
-include { uploadFTP } from './modules/upload2ftp.nf'
-include { getSampleName } from './modules/upload2ftp.nf'
+include { FINDIRODSCRAMS } from './subworkflows/local/findirodscrams/main.nf'
+include { DOWNLOADCRAMS } from './subworkflows/local/downloadcrams/main.nf'
+include { UPLOAD2FTP } from './subworkflows/local/upload2ftp/main.nf'
 
 
 def helpMessage() {
@@ -53,56 +47,14 @@ def helpMessage() {
     """.stripIndent()
 }
 
-workflow DOWNLOADCRAMS {
-    take:
-        cram_metadata
-    main:
-        // download cram files
-        crams = downloadCram(cram_metadata)
-        // crams.cram_file.view()
-        
-        // convert cram files to fastq
-        fastq_files = cramToFastq(crams)
-                                .map { fastqfiles, meta, num_reads_processed -> [fastqfiles, meta + ['num_reads_processed': num_reads_processed]] }
-
-        // calculate read length
-        length = calculateReadLength(fastq_files)
-                                .map { fastqfiles, meta, r1len, r2len, i1len, i2len -> [fastqfiles, meta + ['r1len': r1len, 'r2len': r2len, 'i1len': i1len, 'i2len': i2len]] }
-
-        // rename 10X ATAC files if there are such
-        length.branch {
-            fastq, meta ->
-            atac: checkATAC(meta['library_type'], meta['i2len'], meta['fastq_prefix'])
-            other: true
-        }
-        .set { fastq_ch }
-
-        renameATAC(fastq_ch.atac)
-
-        combined_fastq = fastq_ch.other.concat(renameATAC.out)
-        
-        // save metadata to json file
-        json_ch = saveMetaToJson(combined_fastq).collect()
-
-        // update metadata file
-        metadata = updateMetadata(json_ch)
-    emit:
-        combined_fastq
-    publish:
-        combined_fastq >> "."
-
-        
-}
-
-workflow UPLOADTOFTP {
-    take:
-        fastq_ch
-    main:
-        // merge fastq files together for each sample
-        merged_fastq = concatFastqs(fastq_ch)
-        
-        // upload files to ftp server
-        uploadFTP(merged_fastq)
+// Get a Sample name from fastq path if fastq_path is in format
+// path/to/dir/[Sample Name]_S[Sample Number]_L00[Lane number]_[Read type]_001.fastq.gz
+// .*\/(.*?)_: Matches the part of the string after the last / but before _.
+// _S.+_L\d{3}: Matches _S followed by the sample number and _L00 followed by three digits (representing the lane number)
+// [RI]\d_001\.fastq\.gz: Matches the "Read Type" (R1, R2, I1, I2) and the rest of the file extension.
+def getSampleName(fastq_path) {
+    def match = fastq_path =~ /.*\/(.*?)_S.+_L\d{3}_[RI]\d_001\.fastq\.gz/
+    return match[0][1]
 }
 
 
@@ -120,8 +72,8 @@ workflow {
         // read sample names from file
         samples = Channel.fromPath(params.findmeta, checkIfExists: true).splitCsv().flatten()
         // find cram metadata
-        FINDMETA(samples)
-        cram_metadata = FINDMETA.out.splitCsv( header: true , sep: '\t')
+        FINDIRODSCRAMS(samples)
+        cram_metadata = FINDIRODSCRAMS.out.splitCsv( header: true , sep: '\t')
     // Load metadata from file if specified
     } else if (params.meta != null) {
         // load existing metadata file
@@ -142,13 +94,6 @@ workflow {
     }
     // Run uploadtoftp workflow
     if (params.toftp) {
-        UPLOADTOFTP(fastq_ch)
+        UPLOAD2FTP(fastq_ch)
     }
-}
-
-/////////////////////// WORKFLOW OUTPUT DEFINITION ///////////////////////////////////////////////
-// It look stupid (and it is really stupid), but it is the way it work in current nextflow versions
-
-output {
-
 }

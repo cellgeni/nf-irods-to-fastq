@@ -60,6 +60,7 @@ def getSampleName(fastq_path) {
 
 /////////////////////// MAIN WORKFLOW ///////////////////////////////////////////////
 workflow {
+    main:
     // Validate input options
     if (params.help) {
         helpMessage()

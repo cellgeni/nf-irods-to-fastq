@@ -1,6 +1,5 @@
 include { concatFastqs } from '../../../modules/upload2ftp.nf'
 include { uploadFTP } from '../../../modules/upload2ftp.nf'
-include { getSampleName } from '../../../modules/upload2ftp.nf'
 
 workflow UPLOAD2FTP {
     take:

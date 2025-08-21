@@ -7,7 +7,7 @@
 
 
 /////////////////////// IMPORTS AND FUNCTIONS///////////////////////////////////////////////
-include { FINDIRODSCRAMS } from './subworkflows/local/findirodscrams/main.nf'
+include { IRODS_FINDCRAMS } from './subworkflows/local/irods_findcrams/main.nf'
 include { DOWNLOADCRAMS } from './subworkflows/local/downloadcrams/main.nf'
 include { UPLOAD2FTP } from './subworkflows/local/upload2ftp/main.nf'
 
@@ -73,8 +73,8 @@ workflow {
         // read sample names from file
         samples = Channel.fromPath(params.findmeta, checkIfExists: true).splitCsv().flatten()
         // find cram metadata
-        FINDIRODSCRAMS(samples)
-        cram_metadata = FINDIRODSCRAMS.out.splitCsv( header: true , sep: '\t')
+        IRODS_FINDCRAMS(samples)
+        cram_metadata = IRODS_FINDCRAMS.out.splitCsv( header: true , sep: '\t')
     // Load metadata from file if specified
     } else if (params.meta != null) {
         // load existing metadata file

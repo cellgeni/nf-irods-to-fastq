@@ -1,11 +1,11 @@
 include { findCrams } from '../../../modules/metatable.nf'
 include { getMetadata } from '../../../modules/metatable.nf'
 include { parseMetadata } from '../../../modules/metatable.nf'
-include { combineMetadata} from '../../../modules/metatable.nf'
+include { combineMetadata as updateMetadata } from '../../../modules/metatable.nf'
 
 
 
-workflow FINDIRODSCRAMS {
+workflow IRODS_FINDCRAMS {
     take:
         samples
     main:
@@ -19,7 +19,7 @@ workflow FINDIRODSCRAMS {
         parsed_meta = parseMetadata(meta_files).flatten()
 
         // write metadata to csv file
-       combineMetadata(parsed_meta.collect())
+       updateMetadata(parsed_meta.collect())
     emit:
-        combineMetadata.out.metadata
+        updateMetadata.out.metadata
 }

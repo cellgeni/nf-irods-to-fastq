@@ -3,7 +3,7 @@ include { IRODS_GETMETADATA } from '../../../modules/local/irods/getmetadata'
 include { COMBINE_METADATA } from '../../../modules/local/combine_metadata/main'
 
 
-def mathFilePatterns(path, patterns) {
+def matchFilePatterns(path, patterns) {
     return patterns.any { pattern -> path ==~ pattern.replace('*', '.*') }
 }
 
@@ -57,7 +57,7 @@ workflow IRODS_FINDCRAMS {
             .splitCsv()
             // Remove unnecessary metadata fields, filter files and create a grouping key
             .map { fullmeta, irodslist ->
-                def filtered_list = irodslist.findAll { !mathFilePatterns(it, ignore_list) }
+                def filtered_list = irodslist.findAll { !matchFilePatterns(it, ignore_list) }
                 def meta = [id: fullmeta.id]
                 tuple( groupKey(meta, filtered_list.size()), filtered_list )
             }

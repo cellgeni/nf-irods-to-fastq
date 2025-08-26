@@ -71,15 +71,39 @@ workflow {
     // Run findmeta workflow
     } else if (params.findmeta != null) {
         // read sample names from file
-        samples = Channel.fromPath(params.findmeta, checkIfExists: true).splitCsv().flatten()
+        metadata = Channel.fromPath(params.findmeta, checkIfExists: true)
+        
+        // Split metadata based on file format
+        if (params.findmeta.endsWith('.json')) {
+            metadata = metadata.splitJson()
+        } else if (params.findmeta.endsWith('.csv')) {
+            metadata = metadata.splitCsv(header: true, sep: ',')
+        } else if (params.findmeta.endsWith('.tsv')) {
+            metadata = metadata.splitCsv(header: true, sep: '\t')
+        } else {
+            log.error("Unsupported metadata file format. Please provide a CSV or JSON file.")
+            error("Unsupported metadata file format. Please provide a CSV or JSON file.")
+        }
+
+        // Add 'id' key to each metadata map based on 'sample' column
+        metadata = metadata.map { row -> 
+            // Check that sample column is not empty
+            if (!row.containsKey('sample') || row.sample == null || row.sample.trim() == '') {
+                def row_string = row.collect { k, v -> "${k}:${v}" }.join(',')
+                error("ERROR: 'sample' column is missing or empty in the ${params.findmeta} file for the following entry: \"${row_string}\".\nPlease ensure that the 'sample' column is present and contains valid sample names.")
+            }
+            // Add 'id' key with the same value as 'sample'
+            row + [id: row.sample]
+        }
+
         // find cram metadata
-        IRODS_FINDCRAMS(samples)
-        cram_metadata = IRODS_FINDCRAMS.out.splitCsv( header: true , sep: '\t')
+        IRODS_FINDCRAMS(metadata, params.ignore_patterns)
+        // cram_metadata = IRODS_FINDCRAMS.out.splitCsv( header: true , sep: '\t')
     // Load metadata from file if specified
     } else if (params.meta != null) {
         // load existing metadata file
         cram_metadata = Channel.fromPath(params.meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
-    } 
+    }
     
     // Run downloadcrams workflow
     if (params.cram2fastq) {

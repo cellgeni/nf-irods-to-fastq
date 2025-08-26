@@ -6,34 +6,17 @@ process COMBINE_METADATA {
     val(metalist)
 
     output:
-    path "metadata.csv", emit: csv
-    path "metadata.log", emit: log
-    path "versions.yml", emit: versions
+    path "*.csv",         emit: csv, optional: true
+    path "*.tsv",         emit: tsv, optional: true
+    path "metadata.json", emit: json
+    path "metadata.log",  emit: log
+    path "versions.yml",  emit: versions
     
     script:
     // Create JSON from the entire metalist (array of objects)
-    def json = new groovy.json.JsonBuilder(metalist)
-    new File("metadata.json").text = json.toPrettyString()
-    """
-    validate_metadata.py \\
-        metadata.json
-        --sample_column sample \\
-        --cram_column cram_path \\
-        --prefix_column fastq_prefix \\
-        --check_duplicated_prefix \\
-        --check_readcounts \\
-        --check_library_types \\
-        --check_readlengths \\
-        --logfile metadata.log \\
-        --output metadata.csv \\
-        --sep , \\
-    
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        python: \$(python --version | awk '{ print \$2 }')
-        pandas: \$(python -c "import pandas; print(pandas.__version__)")
-    END_VERSIONS
-    """
+    json = new groovy.json.JsonBuilder(metalist)
+    args = task.ext.args ? task.ext.args : ''
+    template 'collect_metadata.sh'
 
     stub:
     """

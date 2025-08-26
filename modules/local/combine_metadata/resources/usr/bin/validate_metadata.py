@@ -66,6 +66,14 @@ def init_parser() -> argparse.ArgumentParser:
         action="store_true",
     )
     parser.add_argument(
+        "--subset_columns",
+        metavar="<col1 col2 ...>",
+        type=str,
+        help="Specify columns to include in the output file (space-separated). Default is all columns.",
+        default=None,
+        nargs="*",
+    )
+    parser.add_argument(
         "--logfile",
         metavar="<file>",
         type=str,
@@ -77,13 +85,27 @@ def init_parser() -> argparse.ArgumentParser:
         metavar="<file>",
         type=str,
         help="Specify a name for output file",
-        default="metadata.tsv",
+        default="full_metadata.tsv",
+    )
+    parser.add_argument(
+        "--subset_file",
+        metavar="<file>",
+        type=str,
+        help="Specify a name for subset output file",
+        default="subset_metadata.csv",
     )
     parser.add_argument(
         "--sep",
         metavar="<char>",
         type=str,
         help="Specify a separator for the output file",
+        default="\t",
+    )
+    parser.add_argument(
+        "--subset_sep",
+        metavar="<char>",
+        type=str,
+        help="Specify a separator for the subset output file",
         default=",",
     )
     return parser
@@ -220,7 +242,15 @@ def main() -> None:
         )
 
     # Save validation results
-    metadata.to_csv(args.output, sep=args.sep, index=False)
+    metadata.fillna("-").to_csv(args.output, sep=args.sep, index=False)
+    logging.info("Full metadata saved to %s", args.output)
+
+    # Save subset if specified
+    if args.subset_columns:
+        metadata[args.subset_columns].fillna("-").to_csv(
+            args.subset_file, sep=args.subset_sep, index=False
+        )
+        logging.info("Subset metadata saved to %s", args.subset_file)
 
 
 if __name__ == "__main__":

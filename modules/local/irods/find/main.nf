@@ -12,7 +12,7 @@ process IRODS_FIND {
     script:
     def args = task.ext.args ?: ''
     def conditions = task.ext.conditions ?: ''
-    def metaQuery = meta.findAll { key, value -> key != 'id' }.collect { key, value -> "${key} = \"${value}\"" }.join(' and ')
+    def metaQuery = meta.findAll { key, value -> (key != 'id') && value }.collect { key, value -> "${key} = \"${value}\"" }.join(' and ')
     """
     # Find files/collections matching metadata query
     imeta qu $args ${metaQuery} $conditions | \

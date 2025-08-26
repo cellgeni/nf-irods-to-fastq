@@ -1,7 +1,6 @@
 include { IRODS_FIND } from '../../../modules/local/irods/find'
 include { IRODS_GETMETADATA } from '../../../modules/local/irods/getmetadata'
-include { parseMetadata } from '../../../modules/metatable.nf'
-include { combineMetadata} from '../../../modules/metatable.nf'
+include { COMBINE_METADATA } from '../../../modules/local/combine_metadata/main'
 
 
 def mathFilePatterns(path, patterns) {
@@ -69,7 +68,7 @@ workflow IRODS_FINDCRAMS {
         IRODS_GETMETADATA(crampaths)
 
         // Create a prefix for a future fastq file
-        IRODS_GETMETADATA.out.tsv
+        metadata = IRODS_GETMETADATA.out.tsv
             // Read irods metadata from tsv file
             .splitCsv(header: true, sep: '\t')
             // Add cram path to metadata map
@@ -84,12 +83,14 @@ workflow IRODS_FINDCRAMS {
                 def updated_metalist = makeFastqPrefix(metalist)
                 updated_metalist
             }
-            .view()
-    //     // parse data
-    //     parsed_meta = parseMetadata(meta_files).flatten()
+            .collect()
 
-    //     // write metadata to csv file
-    //    combineMetadata(parsed_meta.collect())
-    // emit:
-    //     combineMetadata.out.metadata
+        COMBINE_METADATA(metadata)
+
+        // Collect versions files
+        versions = IRODS_FIND.out.versions.mix(IRODS_GETMETADATA.out.versions).mix(COMBINE_METADATA.out.versions)
+    emit:
+        metadata = COMBINE_METADATA.out.csv
+        versions = versions
+        
 }

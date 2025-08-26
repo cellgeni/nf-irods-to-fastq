@@ -55,7 +55,7 @@ workflow IRODS_FINDCRAMS {
         crampaths = IRODS_FIND.out.csv
             // Get a list of cram files from results.csv file
             .splitCsv()
-            // Remove unnecessary metadata fields, filter files and create a grouping key
+            // Filter files and create a grouping key
             .map { fullmeta, irodslist ->
                 def filtered_list = irodslist.findAll { !matchFilePatterns(it, ignore_list) }
                 def meta = [id: fullmeta.id]
@@ -73,7 +73,7 @@ workflow IRODS_FINDCRAMS {
             .splitCsv(header: true, sep: '\t')
             // Add cram path to metadata map
             .map { groupkey, irodspath, irodsmeta -> 
-                def meta = irodsmeta + [cram_path: irodspath] + groupkey.getGroupTarget()
+                def meta = [id: irodsmeta.sample] + irodsmeta + [cram_path: irodspath]
                 tuple(groupkey, meta)
             }
             // Group channel by sample name
@@ -92,5 +92,4 @@ workflow IRODS_FINDCRAMS {
     emit:
         metadata = COMBINE_METADATA.out.csv
         versions = versions
-        
 }

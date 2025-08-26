@@ -87,13 +87,18 @@ workflow {
 
         // Add 'id' key to each metadata map based on 'sample' column
         metadata = metadata.map { row -> 
-            // Check that sample column is not empty
-            if (!row.containsKey('sample') || row.sample == null || row.sample.trim() == '') {
+            def sample = row.sample ?: row.sample_id
+            // Check that at least one of sample or sample_id columns is present
+            if (!row.containsKey('sample') && !row.containsKey('sample_id')) {
+                error("ERROR: Please make sure that the ${params.findmeta} file contains a 'sample' or 'sample_id' column")
+            // Check that sample column is not empty (if present)
+            }else if (sample == null || sample == '') {
                 def row_string = row.collect { k, v -> "${k}:${v}" }.join(',')
-                error("ERROR: 'sample' column is missing or empty in the ${params.findmeta} file for the following entry: \"${row_string}\".\nPlease ensure that the 'sample' column is present and contains valid sample names.")
+                error("ERROR: both 'sample' and 'sample_id' values are missing or empty in the ${params.findmeta} file for the following entry: \"${row_string}\".\nPlease make sure that the file contains a 'sample' or 'sample_id' column with non-empty values.")
+            // Check that sample_id column is not empty (if present)
             }
-            // Add 'id' key with the same value as 'sample'
-            row + [id: row.sample]
+            // Add 'id' key with the sample value
+            row + [id: sample]
         }
 
         // find cram metadata

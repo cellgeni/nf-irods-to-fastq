@@ -41,7 +41,7 @@ process cramToFastq {
     input:
         tuple path(cram_file), val(meta)
     output:
-        tuple path("*.fastq.gz"), val(meta), env(num_reads_processed)
+        tuple path("*.fastq.gz"), val(meta), env('num_reads_processed')
     script:
         """
         export REF_PATH=${params.REF_PATH}
@@ -71,7 +71,7 @@ process calculateReadLength {
     input:
         tuple path("*"), val(meta)
     output:
-        tuple path("*.fastq.gz", includeInputs: true), val(meta), env(r1len), env(r2len), env(i1len), env(i2len)
+        tuple path("*.fastq.gz", includeInputs: true), val(meta), env('r1len'), env('r2len'), env('i1len'), env('i2len')
     script:
         """
         export r1len="—" r2len="—" i1len="—" i2len="—"

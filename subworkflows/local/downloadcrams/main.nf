@@ -2,7 +2,7 @@ include { downloadCram } from '../../../modules/getfiles.nf'
 include { cramToFastq } from '../../../modules/getfiles.nf'
 include { calculateReadLength } from '../../../modules/getfiles.nf'
 include { saveMetaToJson } from '../../../modules/getfiles.nf'
-include { combineMetadata } from '../../../modules/metatable.nf'
+include { combineMetadata as updateMetadata } from '../../../modules/metatable.nf'
 include { renameATAC } from '../../../modules/getfiles.nf'
 
 
@@ -48,7 +48,7 @@ workflow DOWNLOADCRAMS {
         json_ch = saveMetaToJson(combined_fastq).collect()
 
         // combine metadata file
-        metadata = combineMetadata(json_ch)
+        metadata = updateMetadata(json_ch)
     emit:
         combined_fastq
 }

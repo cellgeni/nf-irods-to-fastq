@@ -1,0 +1,66 @@
+[
+    {
+        "sample": "4861STDY7135911",
+        "sample_id": "3355672"
+    },
+    {
+        "sample": "4861STDY7135912",
+        "sample_id": "3355673"
+    },
+    {
+        "sample": "4861STDY7208417",
+        "sample_id": "3426679"
+    },
+    {
+        "sample": "HCA_P_GON_CZI12139598",
+        "sample_id": "7578779"
+    },
+    {
+        "sample": "Human_colon_16S8000511",
+        "sample_id": "4141086",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample": "Human_colon_16S8000513",
+        "sample_id": "4141087",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample": "Human_colon_16S8000515",
+        "sample_id": "4141088",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample": "Human_colon_16S8123908",
+        "sample_id": "4213826",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample": "Human_colon_16S8123909",
+        "sample_id": "4213827",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample": "Pan_T7917815",
+        "sample_id": "4085492",
+        "type": "cram"
+    },
+    {
+        "sample": "ThDefineAImm12816536",
+        "sample_id": "8207470",
+        "type": "cram"
+    },
+    {
+        "sample": "ThDefineAImm12935575",
+        "sample_id": "8314392",
+        "type": "cram"
+    },
+    {
+        "sample": "UK-CIC10690382",
+        "sample_id": "6171884"
+    },
+    {
+        "sample": "UK-CIC10690383",
+        "sample_id": "6171885"
+    }
+]

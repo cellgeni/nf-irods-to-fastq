@@ -1,5 +1,5 @@
 process CRAM2FASTQ {
-    tag "Converting CRAM to FASTQ"
+    tag "Converting CRAM to FASTQ for sample ${meta.id}"
 
     container 'docker://quay.io/cellgeni/reprocess_10x:latest'
 
@@ -16,7 +16,7 @@ process CRAM2FASTQ {
     def format_atac = task.ext.format_atac ?: false
     """
     # Set reference path for samtools
-    export REF_PATH=${refpath}
+    export REF_PATH="${refpath}"
 
     # Set index-format pattern (influences barcode handling)
     ISTRING="${index_format}"
@@ -36,12 +36,19 @@ process CRAM2FASTQ {
         samtools view -b $cram | bamcollate2 collate=1 reset=1 resetaux=0 auxfilter=RG,BC,QT | samtools fastq -@ ${task.cpus} -1 ${meta.id}_R1_001.fastq.gz -2 ${meta.id}_R2_001.fastq.gz --i1 ${meta.id}_I1_001.fastq.gz --i2 ${meta.id}_I2_001.fastq.gz --index-format \$ISTRING -n -
     fi
 
-    # Check if there are empty fastq files
-    if [[ -z \$(find . -type f -name "*.fastq.gz" -size -50c) ]]
+    # Check if there are empty fastq files and delete them
+    emptyfiles=\$(find . -type f -name "*.fastq.gz" -size -50c)
+    if [[ -n "\$emptyfiles" ]]
     then
-        echo "Error: Empty FASTQ files found"
-        exit 1
-    fi
+        echo "Warning: Found empty FASTQ files (< 50 bytes):"
+        echo "\$emptyfiles"
+        echo "Removing empty files..."
+        find . -type f -name "*.fastq.gz" -size -50c -delete
+        echo "Empty files removed."
+    else
+        echo "No empty FASTQ files found."
+    fi  
+
 
     # Get number of processed reads
     num_reads_processed=\$(grep "processed" .command.log | sed 's/.*processed //; s/ reads//')
@@ -60,7 +67,7 @@ process CRAM2FASTQ {
     echo "I2: \$i2len"
 
     # Rename atac if specified, library type mention atac and i2len equals 16 or 24
-    library_type=${meta.library_type}
+    library_type="${meta.library_type}"
     if [[ $format_atac == true && "\${library_type,,}" == *"atac"* && ( \$i2len -eq 16 || \$i2len -eq 24 ) ]]
     then
         rename 's/_R2_/_R3_/' ${meta.id}_R2_001.fastq.gz
@@ -71,7 +78,7 @@ process CRAM2FASTQ {
     "${task.process}":
         samtools: \$( samtools --version | grep samtools | awk '{print \$2}' )
         htslib: \$( samtools --version | grep "Using htslib" | awk '{print \$3}' )
-        biobambam2: \$( bamcollate2 --version 2>&1 | head -n 1 | awk '{print $5}' )
+        biobambam2: \$( bamcollate2 --version 2>&1 | head -n 1 | awk '{print \$5}' )
     END_VERSIONS
     """
 }

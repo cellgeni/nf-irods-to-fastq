@@ -95,6 +95,13 @@ def init_parser() -> argparse.ArgumentParser:
         default="subset_metadata.csv",
     )
     parser.add_argument(
+        "--sort_column",
+        metavar="<col>",
+        type=str,
+        help="Specify a column to sort the output by",
+        default=None,
+    )
+    parser.add_argument(
         "--sep",
         metavar="<char>",
         type=str,
@@ -132,10 +139,10 @@ def validate_columns_match(
             for row in mismatches.to_dict("records")
         )
         logging.warning(
-            "Mismatches found between columns '%s' and '%s' for cram files: %s",
+            "Mismatches found between columns '%s' and '%s' for cram files:\n%s",
             col1,
             col2,
-            mismatched_files,
+            mismatched_files + "\n",
         )
 
 
@@ -154,7 +161,7 @@ def validate_multiple_values_column(
         metadata.groupby(sample_column)
         .agg(
             n=pd.NamedAgg(column=column, aggfunc="nunique"),
-            values=pd.NamedAgg(column=column, aggfunc=lambda x: ",".join(x)),
+            values=pd.NamedAgg(column=column, aggfunc=lambda x: ",".join(x.unique())),
         )
         .reset_index()
     )
@@ -165,9 +172,9 @@ def validate_multiple_values_column(
             for row in inconsistent_samples.to_dict("records")
         )
         logging.warning(
-            "There are multiple values found in column '%s' for samples: %s",
+            "There are multiple values found in column '%s' for samples:\n%s",
             column,
-            inconsistent_values,
+            inconsistent_values + "\n",
         )
 
 
@@ -187,7 +194,7 @@ def validate_duplicated_column(
         logging.warning(
             "There are duplicated values found in column '%s': %s",
             column,
-            ", ".join(duplicated_values),
+            ", ".join(duplicated_values) + "\n",
         )
 
 
@@ -207,7 +214,11 @@ def main() -> None:
         raise FileNotFoundError(f"File {args.input} not found")
 
     # read metadata
-    metadata = pd.read_json(args.input, orient="records", lines=False)
+    metadata = pd.read_json(args.input, orient="records", lines=False, dtype=str)
+
+    # sort metadata if column if provided
+    if args.sort_column:
+        metadata.sort_values(by=args.sort_column, inplace=True)
 
     # Validate metadata
     if args.check_readcounts:

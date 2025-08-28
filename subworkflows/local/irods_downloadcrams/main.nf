@@ -13,18 +13,17 @@ def checkATAC(library_type, i2len, fastq_prefix) {
 }
 
 
-workflow DOWNLOADCRAMS {
+workflow IRODS_DOWNLOADCRAMS {
     take:
-        cramspaths // channel with tuples [val(meta), path(irodspath)]
+        cramspaths // channel with tuples [val(meta), val(irodspath)]
     main:
         // Download cram files from iRODS
-        IRODS_GETFILE(cramspaths.take(5))
+        IRODS_GETFILE(cramspaths)
         crams = IRODS_GETFILE.out.file
-        crams.view()
         
         // Convert cram files to fastq
         CRAM2FASTQ(crams)
-        CRAM2FASTQ.out.fastq.view()
+        CRAM2FASTQ.out.fastq.take(5).view()
 
         // Combine metadata and create fastq and metadata channels
         CRAM2FASTQ.out.fastq
@@ -34,6 +33,7 @@ workflow DOWNLOADCRAMS {
             }
             .tap { fastqs }
             .map { meta, _fastqs -> meta }
+            .collect(sort: true)
             .set { metadata }
 
         // Combine metadata to a file

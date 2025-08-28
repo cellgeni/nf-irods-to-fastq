@@ -7,9 +7,9 @@
 
 
 /////////////////////// IMPORTS AND FUNCTIONS///////////////////////////////////////////////
-include { IRODS_FINDCRAMS } from './subworkflows/local/irods_findcrams/main.nf'
-include { DOWNLOADCRAMS } from './subworkflows/local/downloadcrams/main.nf'
-include { UPLOAD2FTP } from './subworkflows/local/upload2ftp/main.nf'
+include { IRODS_FINDCRAMS } from './subworkflows/local/irods_findcrams'
+include { IRODS_DOWNLOADCRAMS } from './subworkflows/local/irods_downloadcrams'
+include { UPLOAD2FTP } from './subworkflows/local/upload2ftp'
 
 
 def helpMessage() {
@@ -61,24 +61,34 @@ def getSampleName(fastq_path) {
 /////////////////////// MAIN WORKFLOW ///////////////////////////////////////////////
 workflow {
     main:
-    // Validate input options
+
+    // Init channels
+    metadata = Channel.empty()
+    crams    = Channel.empty()
+    fastqs   = Channel.empty()
+
+    // STEP 0: Validate input options
     if (params.help) {
         helpMessage()
         System.exit(0)
-    } else if (params.findmeta == null && params.cram2fastq == false && params.toftp == false) {
+    } else if (!params.samples && !params.crams && !params.fastqs) {
         helpMessage()
         error "Please use one of the methods listed above"
-    // Run findmeta workflow
-    } else if (params.findmeta != null) {
-        // read sample names from file
-        metadata = Channel.fromPath(params.findmeta, checkIfExists: true)
+    } else if (params.samples && params.crams) {
+        error "Please use either --samples or --crams, not both"
+    }
+
+    // STEP 1: Find CRAMs on iRODS if sample metadata is specified
+    if (params.samples) {
+        // Read sample names from file
+        metadata = Channel.fromPath(params.samples, checkIfExists: true)
         
         // Split metadata based on file format
-        if (params.findmeta.endsWith('.json')) {
+        if (params.samples.endsWith('.json')) {
             metadata = metadata.splitJson()
-        } else if (params.findmeta.endsWith('.csv')) {
+        } else if (params.samples.endsWith('.csv')) {
             metadata = metadata.splitCsv(header: true, sep: ',')
-        } else if (params.findmeta.endsWith('.tsv')) {
+        } else if (params.samples.endsWith('.tsv')) {
             metadata = metadata.splitCsv(header: true, sep: '\t')
         } else {
             log.error("Unsupported metadata file format. Please provide a CSV or JSON file.")
@@ -101,29 +111,38 @@ workflow {
             row + [id: sample]
         }
 
-        // find cram metadata
+        // Find cram metadata
         IRODS_FINDCRAMS(metadata, params.ignore_patterns)
-        // cram_metadata = IRODS_FINDCRAMS.out.splitCsv( header: true , sep: '\t')
-    // Load metadata from file if specified
-    } else if (params.meta != null) {
-        // load existing metadata file
-        cram_metadata = Channel.fromPath(params.meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
+        crams = IRODS_FINDCRAMS.out.metadata
     }
     
-    // Run downloadcrams workflow
-    if (params.cram2fastq) {
-        DOWNLOADCRAMS(cram_metadata)
-        fastq_ch = DOWNLOADCRAMS.out.map {fastq_path, meta -> [meta['sample'], fastq_path]}
-                                    .transpose()
-                                    .groupTuple()
-    // Get fastq files from input
-    } else if (params.fastqfiles != null) {
-        fastq_ch = Channel.fromPath("${params.fastqfiles}/*.fastq.gz")
-                      .map {fastq_path ->  [getSampleName(fastq_path), fastq_path]}
-                      .groupTuple()
+    // STEP 2: Download CRAMs from iRODS and convert them to .fastq format
+    if (params.cram2fastq || params.crams) {
+        // Read CRAM metadata from file if specified and check if it contains all necessary columns
+        crams = params.crams ? Channel.fromPath(params.crams, checkIfExists: true) : crams
+        crams = crams
+            .splitCsv(header: true, sep: ',')
+            .map { row -> 
+                if (row.fastq_prefix == null || row.fastq_prefix == '' || row.cram_path == null || row.cram_path == '') {
+                    def row_string = row.collect { k, v -> "${k}:${v}" }.join(',')
+                    error "CRAM metadata is missing 'fastq_prefix' or 'cram_path' for CRAM: ${row_string}"
+                }
+                row.id = row.fastq_prefix
+                tuple( row, row.cram_path )
+            }
+
+        // Download CRAMs from iRODS and convert them to fastq format
+        IRODS_DOWNLOADCRAMS(crams)
+        fastqs = IRODS_DOWNLOADCRAMS.out.fastqs.map {_meta, fastqfiles -> fastqfiles}.flatten()
     }
-    // Run uploadtoftp workflow
-    if (params.toftp) {
-        UPLOAD2FTP(fastq_ch)
+
+    // STEP 3: Upload fastq files to FTP
+    if (params.toftp || params.fastqs) {
+        // Read fastq files from input if specified and collect fastq files by sample
+        fastqs = params.fastqs ? Channel.fromPath(params.fastqs, checkIfExists: true).splitCsv(header: false, sep: ',') : fastqs
+        fastqs = fastqs.map {fastq_path ->  [getSampleName(fastq_path), fastq_path]}.groupTuple()
+
+        // Upload fastq files to FTP
+        UPLOAD2FTP(fastqs)
     }
 }

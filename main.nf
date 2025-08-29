@@ -14,36 +14,72 @@ include { FASTQS2FTP } from './subworkflows/local/fastq2ftp'
 
 def helpMessage() {
     log.info"""
-    =======================
-    iRODS to FASTQ pipeline
-    =======================
-    This pipeline pulls samples from iRODS along with their metadata and converts them to fastq files.
+    ==============================
+    nf-irods-to-fastq Pipeline
+    ==============================
+    This Nextflow pipeline retrieves samples from iRODS storage, converts CRAM/BAM files to FASTQ format, 
+    and optionally uploads the results to FTP servers. The pipeline supports comprehensive metadata management 
+    and provides three main operations: metadata discovery, CRAM-to-FASTQ conversion, and FTP upload.
+    
     Usage: nextflow run main.nf [OPTIONS]
-        options:
-            --findmeta=path/to/samples.csv       specify a .csv file with sample names to run a metadata search
-            --cram2fastq                         if specified the script runs conversion of cram files that are found on `findmeta` step
-            --meta=path/to/metadata.tsv          this argument spicifies the .tsv with cram files (potentially from `findmeta` step) to run cram2fastq conversion
-            --toftp                              if specified the script uploads the data to ftp server specified in nextflow.config file
-            --fastqfiles                         this argument spicifies the .fastq.gz files (potentially from `cram2fastq` step) to upload them to ftp server
-
-    Examples:
-        1. Run a metadata search for a specified list of samples:
-            nextflow run main.nf --findmeta ./examples/samples.csv
-
-        2. Download cram files (specified in metadata.csv) from IRODS and convert them to fastq
-            nextflow run main.nf --cram2fastq --meta metadata/metadata.tsv
+    
+    == Required Parameters (choose one) ==
+        --samples=path/to/samples.csv       Path to CSV/TSV/JSON file with sample information (requires 'sample' or 'sample_id' column)
+        --crams=path/to/crams.csv           Path to CSV/TSV file with CRAM information (columns: sample, cram_path, fastq_prefix)
+        --fastqs=path/to/fastqs/            Path to directory containing FASTQ files for FTP upload
+    
+    == Operation Flags ==
+        --cram2fastq                        Enable CRAM-to-FASTQ conversion (use with --samples or --crams)
+        --toftp                             Enable FTP upload (use with --fastqs or in combination with other operations)
+    
+    == Optional Parameters ==
+        --output_dir=STRING                 Output directory for results (default: "results")
+        --publish_mode=STRING               File publishing mode (default: "copy")
+        --index_format=STRING               Index format formula for samtools (default: "i*i*")
+        --format_atac=BOOLEAN               Apply ATAC-seq specific formatting (default: true)
+        --ignore_patterns=STRING            Patterns to ignore when finding CRAMs (default: "*_phix.cram,*yhuman*,*#888.cram")
+        --irods_zone=STRING                 iRODS zone to search (default: "seq")
         
-        3. Upload fastq files to ftp server (you to set up the ftp server in nextflow.config):
-            nextflow run main.nf --toftp --fastqfiles ./results/
-        
-        4. Combine several steps to run them together
-            nextflow run main.nf --findmeta ./examples/samples.csv --cram2fastq --toftp
-        
+    == FTP Parameters (required when using --toftp) ==
+        --ftp_host=STRING                   FTP server hostname
+        --username=STRING                   FTP username  
+        --password=STRING                   FTP password
+        --ftp_path=STRING                   Target path on FTP server
 
-    == samples.csv format ==
-    UK-CIC10690382
-    UK-CIC10690383
-    ========================
+    == Examples ==
+    
+    1. Sample metadata discovery:
+        nextflow run main.nf --samples ./examples/samples.csv
+
+    2. Complete pipeline (discovery + conversion):
+        nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
+        
+    3. CRAM-to-FASTQ conversion from existing metadata:
+        nextflow run main.nf --cram2fastq --crams metadata/metadata.tsv
+        
+    4. FTP upload:
+        nextflow run main.nf --toftp --fastqs ./results/
+        
+    5. End-to-end pipeline:
+        nextflow run main.nf --samples ./examples/samples.csv --cram2fastq --toftp
+
+    == Input File Format Examples ==
+    
+    samples.csv:
+        sample,study_title
+        4861STDY7135911,Study_Name
+        Human_colon_16S8000511,Human_colon_16S
+        
+    crams.csv:
+        sample,cram_path,fastq_prefix
+        4861STDY7135911,/seq/24133/24133_1#4.cram,4861STDY7135911_S1_L001
+        4861STDY7135911,/seq/24133/24133_2#2.cram,4861STDY7135911_S1_L002
+        
+    == System Requirements ==
+        - iRODS client (run 'iinit' before starting)
+        - Singularity
+        - LSF environment with LSB_DEFAULT_USERGROUP set
+    ===============================
     """.stripIndent()
 }
 

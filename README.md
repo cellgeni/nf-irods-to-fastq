@@ -246,41 +246,34 @@ The pipeline generates comprehensive reports in the `reports/` directory:
 title: Nextflow pipeline for retrieving CRAM files from iRODS and converting them to FASTQ
 ---
 flowchart TB
-    subgraph discovery["Sample & Metadata Discovery"]
+    subgraph findcrams["IRODS_FINDCRAMS"]
         direction LR
-        v0([Find CRAMs])
-        v1([Get Metadata])
-        v2([Parse Metadata])
-        v3([Combine Metadata])
+        v0([IRODS_FIND])
+        v1([IRODS_GETMETADATA])
+        v2([makeFastqPrefix])
+        v3([COMBINE_METADATA])
     end
     
-    subgraph conversion["CRAM to FASTQ Conversion"]
+    subgraph downloadcrams["IRODS_DOWNLOADCRAMS"]
         direction LR
-        v4([Download CRAM])
-        v5([CRAM to FASTQ])
-        v6([Calculate Read Length])
-        v7([Check ATAC])
-        v8([Rename ATAC])
-        v9([Save Meta to JSON])
-        v10([Update Metadata])
+        v4([IRODS_GETFILE])
+        v5([CRAM2FASTQ])
+        v6([COMBINE_METADATA])
     end
     
-    subgraph upload["FASTQ Processing & Upload"]
+    subgraph fastq2ftp["FASTQS2FTP"]
         direction LR
-        v11([Concatenate FASTQs])
-        v12([Calculate MD5])
-        v13([Upload to FTP])
+        v7([CONCATENATE_FASTQS])
+        v8([CALCULATE_MD5])
+        v9([UPLOAD2FTP])
     end
     
     v0 --> v1 --> v2 --> v3
-    v4 --> v5 --> v6 --> v7{10X ATAC?}
-    v11 --> v12 --> v13
-    v7 --YES--> v8
-    v8 --> v9
-    v7 --NO--> v9
-    v9 --> v10
+    v4 --> v5 --> v6
+    v7 --> v8
+    v7 --> v9
     
-    discovery -.-> conversion -.-> upload
+    findcrams -.-> downloadcrams -.-> fastq2ftp
 ```
 
 ## Usage Notes

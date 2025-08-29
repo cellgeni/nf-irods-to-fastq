@@ -154,10 +154,10 @@ nextflow run main.nf --toftp --fastqs ./examples/fastqs.csv --username "annotare
 **5. End-to-End Pipeline (two-step process):**
 ```bash
 # Step 1: Discovery and conversion
-nextflow run main.nf --samples ./examples/samples.csv --cram2fastq --username "annotare" --password "annotare1" --ftp_host "ftp-private.ebi.ac.uk" --ftp_path "/path/to/ftp/dir"
+nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
 
 # Step 2: Upload the generated fastqs.csv (after step 1 completes)
-nextflow run main.nf --toftp --fastqs ./results/fastqs.csv
+nextflow run main.nf --toftp --fastqs ./results/fastqs.csv --username "annotare" --password "annotare1" --ftp_host "ftp-private.ebi.ac.uk" --ftp_path "/path/to/ftp/dir"
 ```
 
 ### Advanced Usage Examples

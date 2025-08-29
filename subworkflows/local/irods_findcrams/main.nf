@@ -64,18 +64,6 @@ workflow IRODS_FINDCRAMS {
             }
             // Group channel by sample name
             .groupTuple(sort: 'hash')
-            // Add a fastq prefix to metadata map by using sample name, lane, run_id and tag_id
-            // .view { _groupkey, metalist ->
-            //     // get only sample id_run lane and tag_index from each metalist
-            //     def subset = metalist.collect { meta ->
-            //         [sample: meta.sample, id_run: meta.id_run, lane: meta.lane, tag_index: meta.tag_index]
-            //     }
-            //     // get prefix and print each each full map on a new line
-            //     subset = makeFastqPrefix(subset)
-            //     subset.each { meta ->
-            //         println "Fastq prefix for ${meta.sample}, id:run${meta.id_run},lane:${meta.lane}, tag_index:${meta.tag_index} prefix:${meta.fastq_prefix}"
-            //     }
-            // }
             .map { _groupkey, metalist ->
                 def updated_metalist = makeFastqPrefix(metalist)
                 updated_metalist

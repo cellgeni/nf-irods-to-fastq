@@ -7,43 +7,91 @@
 
 
 /////////////////////// IMPORTS AND FUNCTIONS///////////////////////////////////////////////
-include { IRODS_FINDCRAMS } from './subworkflows/local/irods_findcrams/main.nf'
-include { DOWNLOADCRAMS } from './subworkflows/local/downloadcrams/main.nf'
-include { UPLOAD2FTP } from './subworkflows/local/upload2ftp/main.nf'
+include { IRODS_FINDCRAMS } from './subworkflows/local/irods_findcrams'
+include { IRODS_DOWNLOADCRAMS } from './subworkflows/local/irods_downloadcrams'
+include { FASTQS2FTP } from './subworkflows/local/fastq2ftp'
 
 
 def helpMessage() {
     log.info"""
-    =======================
-    iRODS to FASTQ pipeline
-    =======================
-    This pipeline pulls samples from iRODS along with their metadata and converts them to fastq files.
+    ==============================
+    nf-irods-to-fastq Pipeline
+    ==============================
+    This Nextflow pipeline retrieves samples from iRODS storage, converts CRAM/BAM files to FASTQ format, 
+    and optionally uploads the results to FTP servers. The pipeline supports comprehensive metadata management 
+    and provides three main operations: metadata discovery, CRAM-to-FASTQ conversion, and FTP upload.
+    
     Usage: nextflow run main.nf [OPTIONS]
-        options:
-            --findmeta=path/to/samples.csv       specify a .csv file with sample names to run a metadata search
-            --cram2fastq                         if specified the script runs conversion of cram files that are found on `findmeta` step
-            --meta=path/to/metadata.tsv          this argument spicifies the .tsv with cram files (potentially from `findmeta` step) to run cram2fastq conversion
-            --toftp                              if specified the script uploads the data to ftp server specified in nextflow.config file
-            --fastqfiles                         this argument spicifies the .fastq.gz files (potentially from `cram2fastq` step) to upload them to ftp server
-
-    Examples:
-        1. Run a metadata search for a specified list of samples:
-            nextflow run main.nf --findmeta ./examples/samples.csv
-
-        2. Download cram files (specified in metadata.csv) from IRODS and convert them to fastq
-            nextflow run main.nf --cram2fastq --meta metadata/metadata.tsv
+    
+    == Required Parameters (choose one) ==
+        --samples=path/to/samples.csv       Path to CSV/TSV/JSON file with sample information (requires 'sample' or 'sample_id' column)
+        --crams=path/to/crams.csv           Path to CSV/TSV file with CRAM information (columns: sample, cram_path, fastq_prefix)
+        --fastqs=path/to/fastqs.csv         Path to CSV file containing FASTQ file information (columns: sample, path)
+    
+    == Operation Flags ==
+        --cram2fastq                        Enable CRAM-to-FASTQ conversion (use with --samples or --crams)
+        --toftp                             Enable FTP upload (use with --fastqs)
+    
+    == Optional Parameters ==
+        --output_dir=STRING                 Output directory for results (default: "results")
+        --publish_mode=STRING               File publishing mode (default: "copy")
+        --index_format=STRING               Index format formula for samtools (default: "i*i*")
+        --format_atac=BOOLEAN               Apply ATAC-seq specific formatting (default: true)
+        --ignore_patterns=STRING            Patterns to ignore when finding CRAMs (default: "*_phix.cram,*yhuman*,*#888.cram")
+        --irods_zone=STRING                 iRODS zone to search (default: "seq")
         
-        3. Upload fastq files to ftp server (you to set up the ftp server in nextflow.config):
-            nextflow run main.nf --toftp --fastqfiles ./results/
+    == FTP Parameters (required when using --toftp) ==
+        --ftp_host=STRING                   FTP server hostname (default: "ftp-private.ebi.ac.uk")
+        --username=STRING                   FTP username  
+        --password=STRING                   FTP password
+        --ftp_path=STRING                   Target path on FTP server
         
-        4. Combine several steps to run them together
-            nextflow run main.nf --findmeta ./examples/samples.csv --cram2fastq --toftp
-        
+        Note: When using --toftp, you must also provide --fastqs with a CSV file containing FASTQ paths.
 
-    == samples.csv format ==
-    UK-CIC10690382
-    UK-CIC10690383
-    ========================
+    == Examples ==
+    
+    1. Sample metadata discovery:
+        nextflow run main.nf --samples ./examples/samples.csv
+
+    2. Complete pipeline (discovery + conversion):
+        nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
+        
+    3. CRAM-to-FASTQ conversion from existing metadata:
+        nextflow run main.nf --cram2fastq --crams metadata/metadata.tsv
+        
+    4. FTP upload:
+        nextflow run main.nf --toftp --fastqs ./examples/fastqs.csv
+        
+    5. End-to-end pipeline (two-step process):
+        # Step 1: Discovery and conversion
+        nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
+        
+        # Step 2: Upload the generated fastqs.csv (after step 1 completes)
+        nextflow run main.nf --toftp --fastqs ./results/fastqs.csv
+
+    == Input File Format Examples ==
+    
+    samples.csv:
+        sample,study_title
+        4861STDY7135911,Study_Name
+        Human_colon_16S8000511,Human_colon_16S
+        
+    crams.csv:
+        sample,cram_path,fastq_prefix
+        4861STDY7135911,/seq/24133/24133_1#4.cram,4861STDY7135911_S1_L001
+        4861STDY7135911,/seq/24133/24133_2#2.cram,4861STDY7135911_S1_L002
+        
+    fastqs.csv:
+        sample,path
+        4861STDY7135911,results/fastqs/4861STDY7135911/4861STDY7135911_S1_L001_I1_001.fastq.gz
+        4861STDY7135911,results/fastqs/4861STDY7135911/4861STDY7135911_S1_L001_R1_001.fastq.gz
+        
+    == System Requirements ==
+        - Nextflow: Version 25.04.4 or higher
+        - iRODS client (run 'iinit' before starting)
+        - Singularity
+        - LSF environment with LSB_DEFAULT_USERGROUP set
+    ===============================
     """.stripIndent()
 }
 
@@ -61,40 +109,136 @@ def getSampleName(fastq_path) {
 /////////////////////// MAIN WORKFLOW ///////////////////////////////////////////////
 workflow {
     main:
-    // Validate input options
+
+    // Init channels
+    crams    = Channel.empty()
+    versions = Channel.empty()
+
+    // STEP 0: Validate input options
     if (params.help) {
         helpMessage()
         System.exit(0)
-    } else if (params.findmeta == null && params.cram2fastq == false && params.toftp == false) {
+    } else if (!params.samples && !params.crams && !params.fastqs) {
         helpMessage()
         error "Please use one of the methods listed above"
-    // Run findmeta workflow
-    } else if (params.findmeta != null) {
-        // read sample names from file
-        samples = Channel.fromPath(params.findmeta, checkIfExists: true).splitCsv().flatten()
-        // find cram metadata
-        IRODS_FINDCRAMS(samples)
-        cram_metadata = IRODS_FINDCRAMS.out.splitCsv( header: true , sep: '\t')
-    // Load metadata from file if specified
-    } else if (params.meta != null) {
-        // load existing metadata file
-        cram_metadata = Channel.fromPath(params.meta, checkIfExists: true).splitCsv( header: true , sep: '\t')
-    } 
+    } else if (params.samples && params.crams) {
+        error "Please use either --samples or --crams, not both"
+    } else if ((params.toftp || params.fastqs) && (!params.toftp || !params.fastqs || !params.ftp_host || !params.username || !params.password || !params.ftp_path)) {
+        error "Please provide --fastqs and all FTP credentials when using --toftp"
+    }
+
+    // STEP 1: Find CRAMs on iRODS if sample metadata is specified
+    if (params.samples) {
+        // Read sample names from file
+        metadata = Channel.fromPath(params.samples, checkIfExists: true)
+        
+        // Split metadata based on file format
+        if (params.samples.endsWith('.json')) {
+            metadata = metadata.splitJson()
+        } else if (params.samples.endsWith('.csv')) {
+            metadata = metadata.splitCsv(header: true, sep: ',')
+        } else if (params.samples.endsWith('.tsv')) {
+            metadata = metadata.splitCsv(header: true, sep: '\t')
+        } else {
+            log.error("Unsupported metadata file format. Please provide a CSV or JSON file.")
+            error("Unsupported metadata file format. Please provide a CSV or JSON file.")
+        }
+
+        // Add 'id' key to each metadata map based on 'sample' column
+        metadata = metadata.map { row -> 
+            def sample = row.sample ?: row.sample_id
+            // Check that at least one of sample or sample_id columns is present
+            if (!row.containsKey('sample') && !row.containsKey('sample_id')) {
+                error("ERROR: Please make sure that the ${params.findmeta} file contains a 'sample' or 'sample_id' column")
+            // Check that sample column is not empty (if present)
+            }else if (sample == null || sample == '') {
+                def row_string = row.collect { k, v -> "${k}:${v}" }.join(',')
+                error("ERROR: both 'sample' and 'sample_id' values are missing or empty in the ${params.findmeta} file for the following entry: \"${row_string}\".\nPlease make sure that the file contains a 'sample' or 'sample_id' column with non-empty values.")
+            // Check that sample_id column is not empty (if present)
+            }
+            // Add 'id' key with the sample value
+            row + [id: sample]
+        }
+
+        // Find cram metadata
+        IRODS_FINDCRAMS(metadata, params.ignore_patterns)
+        crams = IRODS_FINDCRAMS.out.metadata
+
+        // Add versions files to versions channel
+        versions = versions.mix(IRODS_FINDCRAMS.out.versions)
+    }
     
-    // Run downloadcrams workflow
-    if (params.cram2fastq) {
-        DOWNLOADCRAMS(cram_metadata)
-        fastq_ch = DOWNLOADCRAMS.out.map {fastq_path, meta -> [meta['sample'], fastq_path]}
-                                    .transpose()
-                                    .groupTuple()
-    // Get fastq files from input
-    } else if (params.fastqfiles != null) {
-        fastq_ch = Channel.fromPath("${params.fastqfiles}/*.fastq.gz")
-                      .map {fastq_path ->  [getSampleName(fastq_path), fastq_path]}
-                      .groupTuple()
+    // STEP 2: Download CRAMs from iRODS and convert them to .fastq format
+    if (params.cram2fastq || params.crams) {
+        // Read CRAM metadata from file if specified and check if it contains all necessary columns
+        crams = params.crams ? Channel.fromPath(params.crams, checkIfExists: true) : crams
+        crams = crams
+            .splitCsv(header: true, sep: ',')
+            .map { row -> 
+                if (row.fastq_prefix == null || row.fastq_prefix == '' || row.cram_path == null || row.cram_path == '') {
+                    def row_string = row.collect { k, v -> "${k}:${v}" }.join(',')
+                    error "CRAM metadata is missing 'fastq_prefix' or 'cram_path' for CRAM: ${row_string}"
+                }
+                row.id = row.fastq_prefix
+                tuple( row, row.cram_path )
+            }
+
+        // Download CRAMs from iRODS and convert them to fastq format
+        IRODS_DOWNLOADCRAMS(crams)
+
+        // Write fastq files paths to a csv file
+        IRODS_DOWNLOADCRAMS.out.fastqs
+            .transpose()
+            .collectFile(name: 'fastqs.csv', newLine: false, storeDir: params.output_dir, sort: true, keepHeader: true, skip: 1) { meta, fastq -> 
+                def header = "sample,path"
+                def line = "${meta.sample},${params.output_dir}/fastqs/${meta.sample}/${fastq.name}"
+                "${header}\n${line}\n"
+            }
+            .subscribe { __ -> 
+                log.info("Fastq file list saved to ${params.output_dir}/fastqs.csv")
+            }
+
+        // Add versions files to versions channel
+        versions = versions.mix(IRODS_DOWNLOADCRAMS.out.versions)
     }
-    // Run uploadtoftp workflow
-    if (params.toftp) {
-        UPLOAD2FTP(fastq_ch)
+
+    // STEP 3: Upload fastq files to FTP
+    if (params.toftp && params.fastqs) {
+        // Read fastq files from input and collect fastq files by sample
+        fastqs = Channel.fromPath(params.fastqs, checkIfExists: true)
+            .splitCsv(header: true, sep: ',')
+            .map {row ->  tuple( [id: row.sample], file(row.path) ) }
+            .groupTuple(sort: true)
+
+        // Upload fastq files to FTP
+        FASTQS2FTP(
+            fastqs,
+            params.username,
+            params.password,
+            params.ftp_host,
+            params.ftp_path
+        )
+
+        // Collect md5 checksums
+        FASTQS2FTP.out.fastqs
+            .collectFile(name: 'md5checksums.txt', storeDir: params.output_dir, sort: true, newLine: true) { _meta, fastq, md5 -> 
+                "${fastq.name} ${md5}"
+            }
+            .subscribe { __ -> 
+                log.info("MD5 checksums saved to ${params.output_dir}/md5checksums.txt")
+            }
+
+        // Attach versions.yml files to the channel
+        versions = versions.mix(FASTQS2FTP.out.versions)
     }
+
+    // COLLECT VERSIONS
+    versions = versions
+        .splitText(by: 20)
+        .unique()
+        .collectFile(name: 'versions.yml', storeDir: params.output_dir, sort: true)
+        .subscribe { __ -> 
+                log.info("Versions saved to ${params.output_dir}/versions.yml")
+            }
+
 }

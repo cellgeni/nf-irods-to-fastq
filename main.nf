@@ -63,9 +63,8 @@ workflow {
     main:
 
     // Init channels
-    metadata = Channel.empty()
     crams    = Channel.empty()
-    fastqs   = Channel.empty()
+    versions = Channel.empty()
 
     // STEP 0: Validate input options
     if (params.help) {
@@ -133,16 +132,42 @@ workflow {
 
         // Download CRAMs from iRODS and convert them to fastq format
         IRODS_DOWNLOADCRAMS(crams)
-        fastqs = IRODS_DOWNLOADCRAMS.out.fastqs.map {_meta, fastqfiles -> fastqfiles}.flatten()
+
+        // Write fastq files paths to a csv file
+        IRODS_DOWNLOADCRAMS.out.fastqs
+            .transpose()
+            .collectFile(name: 'fastqlist.csv', newLine: false, storeDir: params.output_dir, sort: true, keepHeader: true, skip: 1) { meta, fastq -> 
+                def header = "sample,path"
+                def line = "${meta.sample},${params.output_dir}/fastqs/${meta.sample}/${fastq.name}"
+                "${header}\n${line}\n"
+            }
+            .subscribe { __ -> 
+                log.info("Fastq file list saved to ${params.output_dir}/fastqlist.csv")
+            }
     }
 
     // STEP 3: Upload fastq files to FTP
     if (params.toftp || params.fastqs) {
-        // Read fastq files from input if specified and collect fastq files by sample
-        fastqs = params.fastqs ? Channel.fromPath(params.fastqs, checkIfExists: true).splitCsv(header: false, sep: ',') : fastqs
-        fastqs = fastqs.map {fastq_path ->  [getSampleName(fastq_path), fastq_path]}.groupTuple()
+        // Read fastq files from input and collect fastq files by sample
+        fastqs = Channel.fromPath(params.fastqs, checkIfExists: true)
+            .splitCsv(header: false, sep: ',')
+            .map {fastq_path ->  [getSampleName(fastq_path), fastq_path]}
+            .groupTuple()
 
         // Upload fastq files to FTP
         UPLOAD2FTP(fastqs)
     }
+
+    // COLLECT VERSIONS
+    versions = IRODS_FINDCRAMS.out.versions
+        .mix(
+            IRODS_DOWNLOADCRAMS.out.versions
+        )
+        .splitText(by: 20)
+        .unique()
+        .collectFile(name: 'versions.yml', storeDir: params.output_dir, sort: true)
+        .subscribe { __ -> 
+                log.info("Versions saved to ${params.output_dir}/versions.yml")
+            }
+
 }

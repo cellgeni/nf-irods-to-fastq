@@ -23,7 +23,6 @@ workflow IRODS_DOWNLOADCRAMS {
         
         // Convert cram files to fastq
         CRAM2FASTQ(crams)
-        CRAM2FASTQ.out.fastq.take(5).view()
 
         // Combine metadata and create fastq and metadata channels
         CRAM2FASTQ.out.fastq

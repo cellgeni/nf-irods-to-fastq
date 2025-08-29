@@ -8,15 +8,8 @@ This Nextflow pipeline retrieves samples from iRODS storage, converts CRAM/BAM f
 
 * `main.nf` — the main Nextflow pipeline that orchestrates all workflows
 * `nextflow.config` — configuration script for IBM LSF submission on Sanger's HPC with Singularity containers and global parameters
-* `subworkflows/local/irods_findcrams/` — subworkflow for discovering CRAM files and metadata from iRODS
-* `subworkflows/local/irods_downloadcrams/` — subworkflow for downloading and converting CRAM files to FASTQ
-* `subworkflows/local/fastq2ftp/` — subworkflow for uploading FASTQ files to FTP servers
-* `modules/local/irods/` — collection of modules for iRODS operations (find, getmetadata, getfile)
-* `modules/local/combine_metadata/` — module for combining and validating metadata
-* `modules/local/cram2fastq/` — module for converting CRAM/BAM files to FASTQ format
-* `modules/local/concatenate_fastqs/` — module for concatenating FASTQ files by sample
-* `modules/local/calculate_md5/` — module for calculating MD5 checksums
-* `modules/local/upload2ftp/` — module for FTP upload operations
+* `subworkflows/` — collection of subworkflows for different pipeline stages
+* `modules/` — collection of reusable modules for various tasks
 * `configs/` — configuration files for different pipeline components
 * `examples/` — example input files demonstrating various input formats
 
@@ -36,11 +29,11 @@ This Nextflow pipeline retrieves samples from iRODS storage, converts CRAM/BAM f
 ### Required Parameters (choose one):
 * `--samples` — Path to a CSV, TSV, or JSON file containing sample information with a `sample` or `sample_id` column
 * `--crams` — Path to a CSV or TSV file containing CRAM file information with columns: `sample`, `cram_path`, `fastq_prefix`
-* `--fastqs` — Path to directory containing FASTQ files to upload to FTP
+* `--fastqs` — Path to a CSV file containing FASTQ file information with columns: `sample`, `path`
 
 ### Operation Flags:
 * `--cram2fastq` — Enable CRAM-to-FASTQ conversion (used with `--samples` or `--crams`)
-* `--toftp` — Enable FTP upload (used with `--fastqs` or in combination with other operations)
+* `--toftp` — Enable FTP upload (used with `--fastqs`)
 
 ### Optional Parameters:
 * `--output_dir` — Output directory for pipeline results (default: `"results"`)
@@ -51,16 +44,20 @@ This Nextflow pipeline retrieves samples from iRODS storage, converts CRAM/BAM f
 * `--irods_zone` — iRODS zone to search (default: `"seq"`)
 
 ### FTP Parameters (required when using `--toftp`):
-* `--ftp_host` — FTP server hostname
+* `--ftp_host` — FTP server hostname (default: `"ftp-private.ebi.ac.uk"`)
 * `--username` — FTP username
 * `--password` — FTP password
 * `--ftp_path` — Target path on FTP server
+
+Note: When using `--toftp`, you must also provide `--fastqs` with a CSV file containing FASTQ paths.
 
 ## Input File Formats
 
 The pipeline supports multiple input formats for different operation modes:
 
 ### Option 1: Sample Discovery (`--samples`)
+
+Specify `sample` or `sample_id` along with other useful metadata columns to find CRAM files on iRODS.
 
 **CSV format:**
 ```csv
@@ -87,6 +84,8 @@ sample	study_title
 
 ### Option 2: Direct CRAM Processing (`--crams`)
 
+Specify `sample`, `cram_path`, and `fastq_prefix` columns to directly process known CRAM files.
+
 **CSV format:**
 ```csv
 sample,cram_path,fastq_prefix
@@ -95,9 +94,12 @@ sample,cram_path,fastq_prefix
 ```
 
 ### Option 3: FASTQ Upload (`--fastqs`)
-Directory path containing FASTQ files in the format:
+
+Specify `sample` and `path` columns for FASTQ files to upload. Note: this requires a CSV file, not a directory path.
 ```
-{sample}_S{sample_number}_L{lane}_{read_type}_001.fastq.gz
+sample,path
+4861STDY7135911,results/fastqs/4861STDY7135911/4861STDY7135911_S1_L001_I1_001.fastq.gz
+4861STDY7135911,results/fastqs/4861STDY7135911/4861STDY7135911_S1_L001_R1_001.fastq.gz
 ```
 
 ## Examples
@@ -142,17 +144,20 @@ nextflow run main.nf --cram2fastq --crams metadata/metadata.tsv
 nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
 ```
 
+Note: The pipeline does not currently support end-to-end operation combining CRAM conversion with FTP upload in a single command. To upload converted FASTQ files, you must first run the conversion step, then use the generated `fastqs.csv` file for FTP upload in a separate command.
+
 **4. FTP Upload:**
 ```bash
-nextflow run main.nf --toftp --fastqs ./results/
+nextflow run main.nf --toftp --fastqs ./examples/fastqs.csv
 ```
 
-**5. End-to-End Pipeline:**
+**5. End-to-End Pipeline (two-step process):**
 ```bash
-nextflow run main.nf \
-    --samples ./examples/samples.csv \
-    --cram2fastq \
-    --toftp
+# Step 1: Discovery and conversion
+nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
+
+# Step 2: Upload the generated fastqs.csv (after step 1 completes)
+nextflow run main.nf --toftp --fastqs ./results/fastqs.csv
 ```
 
 ### Advanced Usage Examples
@@ -163,14 +168,6 @@ nextflow run main.nf \
     --samples ./examples/samples.csv \
     --cram2fastq \
     --output_dir "my_results"
-```
-
-**Custom Index Format:**
-```bash
-nextflow run main.nf \
-    --crams ./examples/crams.csv \
-    --cram2fastq \
-    --index_format "i1i2"
 ```
 
 **Disable ATAC Formatting:**
@@ -199,21 +196,18 @@ results/
 │       ├── {sample}_S1_L001_R1_001.fastq.gz
 │       ├── {sample}_S1_L001_R2_001.fastq.gz
 │       └── ...
-├── concatenated/
-│   └── {sample}/
-│       ├── {sample}_S1_I1_001.fastq.gz
-│       ├── {sample}_S1_R1_001.fastq.gz
-│       └── {sample}_S1_R2_001.fastq.gz
-├── md5sums/
-│   └── {sample}_md5sums.txt
-└── metadata_final.tsv
+├── fastqs.csv                    # Generated CSV file listing all FASTQ paths
+└── metadata_final.tsv            # Final metadata file
 ```
 
 ### After FTP Upload:
 Additional files in `results/`:
 ```
-├── ftp_upload_logs/
-└── upload_checksums.txt
+├── concatenated/                  # Concatenated FASTQ files by sample
+│   ├── {sample}_S1_I1_001.fastq.gz
+│   ├── {sample}_S1_R1_001.fastq.gz
+│   └── {sample}_S1_R2_001.fastq.gz
+└── md5checksums.txt              # MD5 checksums of uploaded files
 ```
 
 ## System Requirements
@@ -222,14 +216,14 @@ Additional files in `results/`:
 - **Singularity**: For containerized execution
 - **iRODS client**: Access to iRODS commands (`iget`, `imeta`, etc.)
 - **LSF**: For job submission on HPC clusters (configured for Sanger's environment)
-- **Python**: Version 3.11.6 or higher (for metadata validation scripts)
 
 ## Error Handling
 
 - **Invalid input files**: Pipeline validates CSV/TSV headers and JSON structure
 - **Missing samples**: Warnings are logged for samples not found in iRODS
-- **iRODS connection**: Pipeline retries failed iRODS operations up to 3 times
-- **Checksum verification**: MD5 mismatches are reported in output logs
+- **Missing required fields**: Pipeline validates presence of required columns (`sample`/`sample_id`, `cram_path`, `fastq_prefix`)
+- **Empty sample values**: Pipeline checks for non-empty sample identifiers
+- **Checksum verification**: MD5 checksums are calculated for data integrity verification
 - **FTP upload failures**: Failed uploads are logged with detailed error messages
 
 ## Monitoring and Logging
@@ -283,6 +277,8 @@ flowchart TB
 - Sample names must contain either a `sample` or `sample_id` column in input files
 - The pipeline automatically handles 10X ATAC-seq specific file naming conventions
 - FASTQ files are concatenated by sample and read type for easier downstream processing
-- FTP uploads include automatic retry mechanisms for failed transfers
+- FTP uploads require both `--toftp` flag AND `--fastqs` parameter with a CSV file (not directory)
+- End-to-end processing (CRAM conversion + FTP upload) requires two separate pipeline runs
 - Large CRAM files may take considerable time to download and convert depending on network bandwidth
 - The pipeline is optimized for batch processing of multiple samples simultaneously
+- The pipeline writes a `fastqs.csv` file to the output directory after CRAM conversion, which can be used for subsequent FTP uploads

@@ -26,11 +26,11 @@ def helpMessage() {
     == Required Parameters (choose one) ==
         --samples=path/to/samples.csv       Path to CSV/TSV/JSON file with sample information (requires 'sample' or 'sample_id' column)
         --crams=path/to/crams.csv           Path to CSV/TSV file with CRAM information (columns: sample, cram_path, fastq_prefix)
-        --fastqs=path/to/fastqs/            Path to directory containing FASTQ files for FTP upload
+        --fastqs=path/to/fastqs.csv         Path to CSV file containing FASTQ file information (columns: sample, path)
     
     == Operation Flags ==
         --cram2fastq                        Enable CRAM-to-FASTQ conversion (use with --samples or --crams)
-        --toftp                             Enable FTP upload (use with --fastqs or in combination with other operations)
+        --toftp                             Enable FTP upload (use with --fastqs)
     
     == Optional Parameters ==
         --output_dir=STRING                 Output directory for results (default: "results")
@@ -41,10 +41,12 @@ def helpMessage() {
         --irods_zone=STRING                 iRODS zone to search (default: "seq")
         
     == FTP Parameters (required when using --toftp) ==
-        --ftp_host=STRING                   FTP server hostname
+        --ftp_host=STRING                   FTP server hostname (default: "ftp-private.ebi.ac.uk")
         --username=STRING                   FTP username  
         --password=STRING                   FTP password
         --ftp_path=STRING                   Target path on FTP server
+        
+        Note: When using --toftp, you must also provide --fastqs with a CSV file containing FASTQ paths.
 
     == Examples ==
     
@@ -58,10 +60,14 @@ def helpMessage() {
         nextflow run main.nf --cram2fastq --crams metadata/metadata.tsv
         
     4. FTP upload:
-        nextflow run main.nf --toftp --fastqs ./results/
+        nextflow run main.nf --toftp --fastqs ./examples/fastqs.csv
         
-    5. End-to-end pipeline:
-        nextflow run main.nf --samples ./examples/samples.csv --cram2fastq --toftp
+    5. End-to-end pipeline (two-step process):
+        # Step 1: Discovery and conversion
+        nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
+        
+        # Step 2: Upload the generated fastqs.csv (after step 1 completes)
+        nextflow run main.nf --toftp --fastqs ./results/fastqs.csv
 
     == Input File Format Examples ==
     
@@ -75,7 +81,13 @@ def helpMessage() {
         4861STDY7135911,/seq/24133/24133_1#4.cram,4861STDY7135911_S1_L001
         4861STDY7135911,/seq/24133/24133_2#2.cram,4861STDY7135911_S1_L002
         
+    fastqs.csv:
+        sample,path
+        4861STDY7135911,results/fastqs/4861STDY7135911/4861STDY7135911_S1_L001_I1_001.fastq.gz
+        4861STDY7135911,results/fastqs/4861STDY7135911/4861STDY7135911_S1_L001_R1_001.fastq.gz
+        
     == System Requirements ==
+        - Nextflow: Version 25.04.4 or higher
         - iRODS client (run 'iinit' before starting)
         - Singularity
         - LSF environment with LSB_DEFAULT_USERGROUP set

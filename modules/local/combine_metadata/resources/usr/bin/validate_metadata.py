@@ -132,6 +132,21 @@ def validate_columns_match(
         col1 (str): The name of the first column to compare
         col2 (str): The name of the second column to compare
     """
+    # Check if required columns exist
+    missing_columns = [
+        col
+        for col in [col1, col2, sample_column, cram_column]
+        if col not in metadata.columns
+    ]
+    if missing_columns:
+        logging.info(
+            "Skipping column match validation for '%s' and '%s' - missing columns: %s",
+            col1,
+            col2,
+            ", ".join(missing_columns),
+        )
+        return
+
     mismatches = metadata[metadata[col1] != metadata[col2]].copy()
     if not mismatches.empty:
         mismatched_files = "\n".join(
@@ -157,6 +172,18 @@ def validate_multiple_values_column(
         metadata (pd.DataFrame): The metadata DataFrame
         column (str): The name of the column to check for consistency
     """
+    # Check if required columns exist
+    missing_columns = [
+        col for col in [column, sample_column] if col not in metadata.columns
+    ]
+    if missing_columns:
+        logging.info(
+            "Skipping multiple values validation for column '%s' - missing columns: %s",
+            column,
+            ", ".join(missing_columns),
+        )
+        return
+
     unique_counts = (
         metadata.groupby(sample_column)
         .agg(
@@ -188,6 +215,14 @@ def validate_duplicated_column(
         metadata (pd.DataFrame): The metadata DataFrame
         column (str): The name of the column to check for duplicates
     """
+    # Check if required column exists
+    if column not in metadata.columns:
+        logging.info(
+            "Skipping duplicate validation for column '%s' - column does not exist",
+            column,
+        )
+        return
+
     duplicated = metadata[column].duplicated()
     if duplicated.any():
         duplicated_values = metadata.loc[duplicated, column].unique()
@@ -218,7 +253,13 @@ def main() -> None:
 
     # sort metadata if column if provided
     if args.sort_column:
-        metadata.sort_values(by=args.sort_column, inplace=True)
+        if args.sort_column in metadata.columns:
+            metadata.sort_values(by=args.sort_column, inplace=True)
+        else:
+            logging.warning(
+                "Sort column '%s' does not exist in metadata. Skipping sorting.",
+                args.sort_column,
+            )
 
     # Validate metadata
     if args.check_readcounts:
@@ -258,10 +299,29 @@ def main() -> None:
 
     # Save subset if specified
     if args.subset_columns:
-        metadata[args.subset_columns].fillna("-").to_csv(
-            args.subset_file, sep=args.subset_sep, index=False
-        )
-        logging.info("Subset metadata saved to %s", args.subset_file)
+        # Check which subset columns exist
+        existing_columns = [
+            col for col in args.subset_columns if col in metadata.columns
+        ]
+        missing_columns = [
+            col for col in args.subset_columns if col not in metadata.columns
+        ]
+
+        if missing_columns:
+            logging.warning(
+                "Some subset columns do not exist in metadata and will be skipped: %s",
+                ", ".join(missing_columns),
+            )
+
+        if existing_columns:
+            metadata[existing_columns].fillna("-").to_csv(
+                args.subset_file, sep=args.subset_sep, index=False
+            )
+            logging.info("Subset metadata saved to %s", args.subset_file)
+        else:
+            logging.warning(
+                "No valid subset columns found. Skipping subset file creation."
+            )
 
 
 if __name__ == "__main__":

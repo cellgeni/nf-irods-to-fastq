@@ -15,34 +15,39 @@ def checkATAC(library_type, i2len, fastq_prefix) {
 
 workflow IRODS_DOWNLOADCRAMS {
     take:
-        cramspaths // channel with tuples [val(meta), val(irodspath)]
+    cramspaths // channel with tuples [val(meta), val(irodspath)]
+    
     main:
-        // Download cram files from iRODS
-        IRODS_GETFILE(cramspaths)
-        crams = IRODS_GETFILE.out.file
-        
-        // Convert cram files to fastq
-        CRAM2FASTQ(crams)
+    // Download cram files from iRODS
+    IRODS_GETFILE(cramspaths)
+    crams = IRODS_GETFILE.out.file
+    
+    // Convert cram files to fastq
+    CRAM2FASTQ(crams)
 
-        // Combine metadata and create fastq and metadata channels
-        CRAM2FASTQ.out.fastq
-            .map { meta, fastqs, num_reads_processed, r1len, r2len, i1len, i2len ->
-                def new_meta = meta + [num_reads_processed: num_reads_processed, r1len: r1len, r2len: r2len, i1len: i1len, i2len: i2len]
-                tuple( new_meta, fastqs )
-            }
-            .tap { fastqs }
-            .map { meta, _fastqs -> meta }
-            .collect(sort: true)
-            .set { metadata }
+    // Combine metadata and create fastq and metadata channels
+    CRAM2FASTQ.out.fastq
+        .map { meta, fastqs, num_reads_processed, r1len, r2len, i1len, i2len ->
+            def new_meta = meta + [num_reads_processed: num_reads_processed, r1len: r1len, r2len: r2len, i1len: i1len, i2len: i2len]
+            tuple( new_meta, fastqs )
+        }
+        .tap { fastqs }
+        .map { meta, _fastqs -> meta }
+        .collect(sort: true)
+        .set { metadata }
 
-        // Combine metadata to a file
-        COMBINE_METADATA(metadata)
+    // Combine metadata to a file
+    COMBINE_METADATA(metadata)
 
-        // Combine versions
-        versions = IRODS_GETFILE.out.versions.mix(CRAM2FASTQ.out.versions, COMBINE_METADATA.out.versions)
+    // Combine versions
+    versions = IRODS_GETFILE.out.versions.first()
+        .mix(
+            CRAM2FASTQ.out.versions.first(),
+            COMBINE_METADATA.out.versions
+        )
 
     emit:
-        fastqs   = fastqs
-        metadata = COMBINE_METADATA.out.tsv
-        versions = versions
+    fastqs   = fastqs
+    metadata = COMBINE_METADATA.out.tsv
+    versions = versions
 }

@@ -16,7 +16,6 @@ workflow FASTQS2FTP {
 
     // Flatten the channel to work with individual files
     concat_fastqs = CONCATENATE_FASTQS.out.fastq.transpose()
-    concat_fastqs.view()
 
     // STEP 2: Calculate md5 for each fastq file
     CALCULATE_MD5(concat_fastqs)

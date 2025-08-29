@@ -148,13 +148,13 @@ Note: The pipeline does not currently support end-to-end operation combining CRA
 
 **4. FTP Upload:**
 ```bash
-nextflow run main.nf --toftp --fastqs ./examples/fastqs.csv
+nextflow run main.nf --toftp --fastqs ./examples/fastqs.csv --username "annotare" --password "annotare1" --ftp_host "ftp-private.ebi.ac.uk" --ftp_path "/path/to/ftp/dir"
 ```
 
 **5. End-to-End Pipeline (two-step process):**
 ```bash
 # Step 1: Discovery and conversion
-nextflow run main.nf --samples ./examples/samples.csv --cram2fastq
+nextflow run main.nf --samples ./examples/samples.csv --cram2fastq --username "annotare" --password "annotare1" --ftp_host "ftp-private.ebi.ac.uk" --ftp_path "/path/to/ftp/dir"
 
 # Step 2: Upload the generated fastqs.csv (after step 1 completes)
 nextflow run main.nf --toftp --fastqs ./results/fastqs.csv

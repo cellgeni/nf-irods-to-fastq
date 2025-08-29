@@ -8,36 +8,22 @@ def matchFilePatterns(path, patterns) {
 }
 
 def makeFastqPrefix(metadata_list) {
-    // A map to track unique tags for each unique runid_lane
-    def cramDict = [:]
-    
-    // Sort metadata list by run_id + lane
-    def sortedMetadata = metadata_list.sort { meta -> 
-        "${meta.id_run}_${meta.lane ?: '1'}"
+    Map<String, List> cramDict = [:].withDefault { [] }
+
+    def sortedMetadata = metadata_list.sort { m ->
+        "${m.id_run}_${(m.lane ?: '1')}".toString()
     }
-    
-    // Make unique prefix for each metadata entry
-    sortedMetadata.eachWithIndex { meta, globalIndex ->
-        // Parse cram name to get run_id, lane and tag_id
-        def runidLane = "${meta.id_run}_${meta.lane ?: '1'}"
-        def tagId = meta.tag_index
-        
-        // Initialize list if not exists
-        if (!cramDict.containsKey(runidLane)) {
-            cramDict[runidLane] = []
-        }
-        
-        // Add runid_lane + tag_id combination to the dict
-        cramDict[runidLane].add(tagId)
-        
-        // Make a name for fastq file
+
+    sortedMetadata.each { meta ->
+        String runidLane = "${meta.id_run}_${(meta.lane ?: '1')}".toString()
+        cramDict[runidLane] << meta.tag_index
+
         def sampleName = meta.sample
-        def sampleIdx = cramDict[runidLane].size()
-        def laneIdx = (globalIndex + 1).toString()
-        
-        meta.fastq_prefix = "${sampleName}_S${sampleIdx}_L${laneIdx.padLeft(3, '0')}"
+        def sampleIdx  = cramDict[runidLane].size()
+        def laneIdx    = cramDict.size() // number of unique runid_lane seen so far
+
+        meta.fastq_prefix = String.format("%s_S%d_L%03d", sampleName, sampleIdx, laneIdx)
     }
-    
     return metadata_list
 }
 
@@ -77,13 +63,12 @@ workflow IRODS_FINDCRAMS {
                 tuple(groupkey, meta)
             }
             // Group channel by sample name
-            .groupTuple()
-            // Add a fastq prefix to metadata map by using sample name, lane, run_id and tag_id
+            .groupTuple(sort: 'hash')
             .map { _groupkey, metalist ->
                 def updated_metalist = makeFastqPrefix(metalist)
                 updated_metalist
             }
-            .collect()
+            .collect(sort: true)
 
         COMBINE_METADATA(metadata)
 

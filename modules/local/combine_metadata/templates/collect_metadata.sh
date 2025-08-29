@@ -9,7 +9,7 @@ END_METADATA
 validate_metadata.py \\
     metadata.json \\
     $args \\
-    --logfile metadata.log
+    --logfile warnings.log
 
 cat <<-END_VERSIONS > versions.yml
 "${task.process}":

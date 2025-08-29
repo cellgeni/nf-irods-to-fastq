@@ -113,6 +113,9 @@ workflow {
         // Find cram metadata
         IRODS_FINDCRAMS(metadata, params.ignore_patterns)
         crams = IRODS_FINDCRAMS.out.metadata
+
+        // Add versions files to versions channel
+        versions = versions.mix(IRODS_FINDCRAMS.out.versions)
     }
     
     // STEP 2: Download CRAMs from iRODS and convert them to .fastq format
@@ -144,6 +147,9 @@ workflow {
             .subscribe { __ -> 
                 log.info("Fastq file list saved to ${params.output_dir}/fastqlist.csv")
             }
+
+        // Add versions files to versions channel
+        versions = versions.mix(IRODS_DOWNLOADCRAMS.out.versions)
     }
 
     // STEP 3: Upload fastq files to FTP
@@ -159,10 +165,7 @@ workflow {
     }
 
     // COLLECT VERSIONS
-    versions = IRODS_FINDCRAMS.out.versions
-        .mix(
-            IRODS_DOWNLOADCRAMS.out.versions
-        )
+    versions = versions
         .splitText(by: 20)
         .unique()
         .collectFile(name: 'versions.yml', storeDir: params.output_dir, sort: true)

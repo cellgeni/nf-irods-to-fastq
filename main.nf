@@ -9,7 +9,7 @@
 /////////////////////// IMPORTS AND FUNCTIONS///////////////////////////////////////////////
 include { IRODS_FINDCRAMS } from './subworkflows/local/irods_findcrams'
 include { IRODS_DOWNLOADCRAMS } from './subworkflows/local/irods_downloadcrams'
-include { UPLOAD2FTP } from './subworkflows/local/upload2ftp'
+include { FASTQS2FTP } from './subworkflows/local/fastq2ftp'
 
 
 def helpMessage() {
@@ -75,6 +75,8 @@ workflow {
         error "Please use one of the methods listed above"
     } else if (params.samples && params.crams) {
         error "Please use either --samples or --crams, not both"
+    } else if ((params.toftp || params.fastqs) && (!params.toftp || !params.fastqs || !params.ftp_host || !params.username || !params.password || !params.ftp_path)) {
+        error "Please provide --fastqs and all FTP credentials when using --toftp"
     }
 
     // STEP 1: Find CRAMs on iRODS if sample metadata is specified
@@ -139,13 +141,13 @@ workflow {
         // Write fastq files paths to a csv file
         IRODS_DOWNLOADCRAMS.out.fastqs
             .transpose()
-            .collectFile(name: 'fastqlist.csv', newLine: false, storeDir: params.output_dir, sort: true, keepHeader: true, skip: 1) { meta, fastq -> 
+            .collectFile(name: 'fastqs.csv', newLine: false, storeDir: params.output_dir, sort: true, keepHeader: true, skip: 1) { meta, fastq -> 
                 def header = "sample,path"
                 def line = "${meta.sample},${params.output_dir}/fastqs/${meta.sample}/${fastq.name}"
                 "${header}\n${line}\n"
             }
             .subscribe { __ -> 
-                log.info("Fastq file list saved to ${params.output_dir}/fastqlist.csv")
+                log.info("Fastq file list saved to ${params.output_dir}/fastqs.csv")
             }
 
         // Add versions files to versions channel
@@ -153,15 +155,33 @@ workflow {
     }
 
     // STEP 3: Upload fastq files to FTP
-    if (params.toftp || params.fastqs) {
+    if (params.toftp && params.fastqs) {
         // Read fastq files from input and collect fastq files by sample
         fastqs = Channel.fromPath(params.fastqs, checkIfExists: true)
-            .splitCsv(header: false, sep: ',')
-            .map {fastq_path ->  [getSampleName(fastq_path), fastq_path]}
-            .groupTuple()
+            .splitCsv(header: true, sep: ',')
+            .map {row ->  tuple( [id: row.sample], file(row.path) ) }
+            .groupTuple(sort: true)
 
         // Upload fastq files to FTP
-        UPLOAD2FTP(fastqs)
+        FASTQS2FTP(
+            fastqs,
+            params.username,
+            params.password,
+            params.ftp_host,
+            params.ftp_path
+        )
+
+        // Collect md5 checksums
+        FASTQS2FTP.out.fastqs
+            .collectFile(name: 'md5checksums.txt', storeDir: params.output_dir, sort: true, newLine: true) { _meta, fastq, md5 -> 
+                "${fastq.name} ${md5}"
+            }
+            .subscribe { __ -> 
+                log.info("MD5 checksums saved to ${params.output_dir}/md5checksums.txt")
+            }
+
+        // Attach versions.yml files to the channel
+        versions = versions.mix(FASTQS2FTP.out.versions)
     }
 
     // COLLECT VERSIONS

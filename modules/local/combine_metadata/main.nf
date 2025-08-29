@@ -9,7 +9,7 @@ process COMBINE_METADATA {
     path "*.csv",         emit: csv, optional: true
     path "*.tsv",         emit: tsv, optional: true
     path "metadata.json", emit: json
-    path "metadata.log",  emit: log
+    path "warnings.log",  emit: log
     path "versions.yml",  emit: versions
     
     script:
@@ -21,7 +21,7 @@ process COMBINE_METADATA {
     stub:
     """
     touch metadata.csv
-    touch metadata.log
+    touch warnings.log
     
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

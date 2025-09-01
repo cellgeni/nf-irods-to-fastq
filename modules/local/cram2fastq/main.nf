@@ -1,7 +1,7 @@
 process CRAM2FASTQ {
     tag "Converting CRAM to FASTQ for sample ${meta.id}"
 
-    container 'docker://quay.io/cellgeni/reprocess_10x:latest'
+    container 'docker://quay.io/cellgeni/reprocess_10x:1.1'
 
     input:
     tuple val(meta), path(cram)

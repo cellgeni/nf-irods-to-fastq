@@ -1,0 +1,54 @@
+[
+    {
+        "sample": "4861STDY7135911"
+    },
+    {
+        "sample": "4861STDY7135912",
+        "sample_id": "3355673"
+    },
+    {
+        "sample_id": "3426679"
+    },
+    {
+        "sample": "HCA_P_GON_CZI12139598",
+        "sample_id": "7578779"
+    },
+    {
+        "sample": "Human_colon_16S8000511",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample_id": "4141087",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample_id": "4141088",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample": "Human_colon_16S8123908",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample": "Human_colon_16S8123909",
+        "study_title": "Human_colon_16S"
+    },
+    {
+        "sample_id": "4085492",
+        "type": "cram"
+    },
+    {
+        "sample_id": "8207470",
+        "type": "cram"
+    },
+    {
+        "sample_id": "8314392",
+        "type": "cram"
+    },
+    {
+        "sample": "UK-CIC10690382"
+    },
+    {
+        "sample_id": "6171885"
+    }
+]

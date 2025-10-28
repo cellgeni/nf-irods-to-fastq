@@ -149,11 +149,11 @@ workflow {
             def sample = row.sample ?: row.sample_id
             // Check that at least one of sample or sample_id columns is present
             if (!row.containsKey('sample') && !row.containsKey('sample_id')) {
-                error("ERROR: Please make sure that the ${params.findmeta} file contains a 'sample' or 'sample_id' column")
+                error("ERROR: Please make sure that the ${params.samples} file contains a 'sample' or 'sample_id' column")
             // Check that sample column is not empty (if present)
             }else if (sample == null || sample == '') {
                 def row_string = row.collect { k, v -> "${k}:${v}" }.join(',')
-                error("ERROR: both 'sample' and 'sample_id' values are missing or empty in the ${params.findmeta} file for the following entry: \"${row_string}\".\nPlease make sure that the file contains a 'sample' or 'sample_id' column with non-empty values.")
+                error("ERROR: both 'sample' and 'sample_id' values are missing or empty in the ${params.samples} file for the following entry: \"${row_string}\".\nPlease make sure that the file contains a 'sample' or 'sample_id' column with non-empty values.")
             // Check that sample_id column is not empty (if present)
             }
             // Add 'id' key with the sample value

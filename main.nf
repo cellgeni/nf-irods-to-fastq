@@ -173,9 +173,9 @@ workflow {
         // Read CRAM metadata from file if specified and check if it contains all necessary columns
         crams = params.crams ? Channel.fromPath(params.crams, checkIfExists: true) : crams
         crams = crams
-            .splitCsv(header: true, sep: ',')
+            .splitCsv(header: true, sep: ',', quote: '"')
             .map { row -> 
-                if (row.fastq_prefix == null || row.fastq_prefix == '' || row.cram_path == null || row.cram_path == '') {
+                if (!row.containsKey('fastq_prefix') || row.fastq_prefix == null || row.fastq_prefix == '' || !row.containsKey('cram_path') || row.cram_path == null || row.cram_path == '') {
                     def row_string = row.collect { k, v -> "${k}:${v}" }.join(',')
                     error "CRAM metadata is missing 'fastq_prefix' or 'cram_path' for CRAM: ${row_string}"
                 }

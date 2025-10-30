@@ -24,7 +24,7 @@ process IRODS_GETMETADATA {
     fi
 
     # Get metadata from iRODS
-    get_metadata.sh \$resource "${irodspath}" > metadata.tsv
+    get_metadata.sh \$resource "${irodspath}" | tr '"' "'" > metadata.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

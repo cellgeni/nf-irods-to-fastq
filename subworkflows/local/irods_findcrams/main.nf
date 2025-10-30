@@ -1,6 +1,6 @@
-include { IRODS_FIND } from '../../../modules/local/irods/find'
+include { IRODS_FIND        } from '../../../modules/local/irods/find'
 include { IRODS_GETMETADATA } from '../../../modules/local/irods/getmetadata'
-include { COMBINE_METADATA } from '../../../modules/local/combine_metadata/main'
+include { COMBINE_METADATA  } from '../../../modules/local/combine_metadata/main'
 
 
 def matchFilePatterns(path, patterns) {
@@ -8,14 +8,14 @@ def matchFilePatterns(path, patterns) {
 }
 
 def makeFastqPrefix(metadata_list) {
-    Map<String, List> cramDict = [:].withDefault { [] }
+    def cramDict = [:].withDefault { [] }
 
     def sortedMetadata = metadata_list.sort { m ->
         "${m.id_run}_${(m.lane ?: '1')}".toString()
     }
 
     sortedMetadata.each { meta ->
-        String runidLane = "${meta.id_run}_${(meta.lane ?: '1')}".toString()
+        def runidLane = "${meta.id_run}_${(meta.lane ?: '1')}".toString()
         cramDict[runidLane] << meta.tag_index
 
         def sampleName = meta.sample
@@ -81,6 +81,6 @@ workflow IRODS_FINDCRAMS {
         )
 
     emit:
-    metadata = COMBINE_METADATA.out.csv
+    metadata = COMBINE_METADATA.out.csv.flatten().first()
     versions = versions
 }

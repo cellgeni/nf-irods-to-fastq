@@ -14,6 +14,6 @@ export LSB_DEFAULT_USERGROUP=<YOURGROUP>
 META="/path/to/samples.csv"
 
 nextflow run main.nf \
-    --findmeta "${META}" \
+    --samples "${META}" \
     --cram2fastq \
     -resume

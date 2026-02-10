@@ -4,6 +4,19 @@
 
 This Nextflow pipeline retrieves samples from iRODS storage, converts CRAM/BAM files to FASTQ format, and optionally uploads the results to FTP servers. The pipeline supports comprehensive metadata management and provides three main operations: metadata discovery, CRAM-to-FASTQ conversion, and FTP upload.
 
+## Quick start
+If you just need to get fastq from irods, then first create a `actions/samples.csv` file with single column:
+```
+sample
+rPCNSL14736682
+rPCNSL14736778
+...
+```
+and run 
+```
+nextflow run cellgeni/nf-irods-to-fastq --cram2fastq --samples actions/samples.csv
+```
+
 ## Contents of Repo
 
 * `main.nf` — the main Nextflow pipeline that orchestrates all workflows
